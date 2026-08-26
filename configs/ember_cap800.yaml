@@ -76,5 +76,5 @@ retrain:
   # oversized cap makes full_replay / hard_mining / bounded_buffer collect
   # identical data and the data-selection axis cannot differentiate at all.
   # It also models a real vendor's bounded adversarial-retraining budget.
-  buffer_size: 20000   # effectively unbounded: capacity control
+  buffer_size: 800
   mode: scratch

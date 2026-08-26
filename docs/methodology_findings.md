@@ -126,6 +126,27 @@ stochastic mimicry attacker, and the attacker-algorithm comparison above is
 reported as a secondary finding rather than assumed. This also makes the sweep
 roughly three times cheaper, since it needs no per-round policy training.
 
+**Why the attacker was not run as a factorial axis.** The roadmap lists the
+attacker algorithm as a secondary axis, intended to check that the
+retraining-policy conclusion generalises beyond one attacker. That check was
+deliberately not run, for a reason that follows directly from Finding 4 rather
+than from its cost. DQN reaches only **0.018** attack success in a full
+co-evolution round on real EMBER, against 0.783 for the stochastic mimicry
+attacker, and PPO is both weaker and non-monotone in its training budget. An
+attacker pinned that close to the floor cannot discriminate between defensive
+policies: with almost nothing evading in the first place, every data-selection
+strategy would post a near-zero settled evasion rate and the three would look
+alike **whether or not the conclusion actually generalises**. The experiment
+would therefore return a null that is uninformative by construction — it would
+measure the attacker's weakness, not the policies' similarity — while costing
+roughly 22 hours of compute (measured: ~50 minutes per cell across 27 cells).
+The honest robustness claim is the narrower one already supported: the
+retraining-policy comparison holds *for an attacker strong enough to create
+meaningful pressure*, and establishing whether it also holds under a strong
+*learned* attacker requires an RL agent that is competitive with mimicry in the
+first place, which Finding 4 shows is an open problem rather than a knob to
+turn.
+
 ## Finding 5 — a fixed attack strategy produces a knockout, not an iterated game
 
 With a *single* fixed mimicry direction set, adversarial retraining closed the
