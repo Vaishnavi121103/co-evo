@@ -103,3 +103,42 @@ def test_mimicry_respects_additive_only():
     add_idx = fs.mutable_idx[fs.additive_only]
     if add_idx.size:
         assert (D[:, add_idx] >= -1e-6).all()
+
+
+def test_env_seed_changes_exemplar_targets_between_rounds():
+    """Each co-evolution round must explore new benign targets.
+
+    With one fixed seed the attacker redraws the same exemplars every round and
+    keeps re-attacking a region the defender was already retrained on, so the
+    defender appears to win by memorising a few points rather than by
+    generalising.
+    """
+    ds, _ = make_synthetic(n_features=20, n_train=400, n_test_malicious=10, seed=1)
+
+    def targets(seed):
+        env = MalwareEvasionEnv(
+            _StubDefender(), ds.malicious(), ds.feature_space, n_actions=6,
+            max_steps=3, seed=seed, benign_pool=ds.benign(),
+        )
+        return env._sample_targets(5)
+
+    assert np.array_equal(targets(7), targets(7))          # reproducible
+    assert not np.array_equal(targets(7), targets(8))      # round-to-round variety
+
+
+def test_orchestrator_uses_distinct_seeds_per_round_and_purpose():
+    from coevomal.config import ExperimentConfig
+    from coevomal.orchestrator import CoEvolutionOrchestrator
+
+    cfg = ExperimentConfig(name="seedcheck", rounds=1)
+    cfg.dataset.n_features, cfg.dataset.n_train = 12, 200
+    cfg.dataset.n_test_malicious, cfg.env.n_actions, cfg.env.max_steps = 10, 6, 4
+    cfg.defender.max_iter = 10
+    orch = CoEvolutionOrchestrator(cfg, verbose=False)
+    orch.defender.fit(orch.X_train, orch.y_train)
+    snap = orch.defender.snapshot()
+    seeds = {
+        (r, p): orch._make_env(snap, round_idx=r, purpose=p).rng.integers(0, 10**9)
+        for r in (0, 1, 2) for p in ("train", "eval")
+    }
+    assert len(set(seeds.values())) == len(seeds), "env seeds collide"

@@ -95,7 +95,13 @@ Against the same mimicry action space and query budget:
 | Stochastic policy over mimicry actions | **0.194** |
 | DQN, 150 episodes | 0.052 |
 | DQN, 1000 cumulative episodes | 0.104 |
-| PPO, 150 episodes (greedy eval) | 0.030 – 0.097 |
+| PPO, 150 / 300 / 600 / 1000 episodes | 0.030 / 0.030 / 0.104 / 0.022 |
+
+PPO is additionally *non-monotone* in its training budget -- more training made
+it worse -- so neither RL agent provides stable pressure. In a full
+co-evolution round on real EMBER the DQN attacker reached only **0.018**
+attack success, with most of its apparent 0.102 evasion being the defender's
+pre-existing false negatives rather than anything the attack achieved.
 
 DQN improves with a cumulative budget -- which is what the co-evolution loop
 actually provides, since the attacker persists across rounds -- but plateaus
@@ -116,5 +122,32 @@ attributing it to optimisation noise.
 **Consequence for the study.** The retraining-policy comparison is the
 contribution; the attacker only needs to supply strong, consistent, and
 reproducible adversarial pressure. The main factorial study therefore uses the
-strongest available attacker, and the attacker-algorithm comparison above is
-reported as a secondary finding rather than assumed.
+stochastic mimicry attacker, and the attacker-algorithm comparison above is
+reported as a secondary finding rather than assumed. This also makes the sweep
+roughly three times cheaper, since it needs no per-round policy training.
+
+## Finding 5 — a fixed attack strategy produces a knockout, not an iterated game
+
+With a *single* fixed mimicry direction set, adversarial retraining closed the
+attack permanently after one round: evasion went 0.280 -> 0.003 -> 0.000 and
+never recovered. Every retraining policy would then score identically at zero
+and the factorial comparison would be vacuous.
+
+Rebuilding the action set each episode against a randomly drawn benign
+exemplar keeps the game alive: the decay becomes gradual
+(0.214 -> 0.037 -> 0.020 -> 0.007), which leaves room for policies to differ in
+*how fast* they suppress evasion, at *what cost*, and whether they oscillate on
+the way. The lesson generalises: a co-evolution benchmark needs an attacker
+whose reachable set is not something the defender can memorise in one round.
+
+## Finding 6 — two experiment-design requirements the pilot exposed
+
+* **The replay cap must bind.** With ~100 evasions found per round and a
+  4000-sample cap, `full_replay`, `hard_mining` and `bounded_buffer` collect
+  *identical* data, so the data-selection axis cannot differentiate at all.
+  The cap has to be sized against the actual discovery rate -- which also
+  models a vendor's bounded adversarial-retraining budget.
+* **Early stopping must be off.** Halting a run once it converges leaves
+  policies evaluated over different numbers of rounds, so retraining-cost and
+  oscillation are no longer like-for-like. The factorial runs a fixed horizon
+  for every cell.

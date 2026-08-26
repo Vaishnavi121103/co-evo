@@ -64,3 +64,46 @@ def test_build_training_set_labels_evasions_malicious():
     X, y = p.build_training_set(base_X, base_y)
     assert X.shape[0] == 8
     assert y.sum() == 3  # the 3 evasive rows are labelled malicious
+
+
+def test_hard_mining_rescores_against_current_defender():
+    """Buffered scores must be refreshed, not left stale from earlier rounds.
+
+    Scores recorded in earlier rounds came from a defender that has since been
+    retrained; ranking a mixed buffer on them compares numbers produced by
+    different models.
+    """
+    from coevomal.config import RetrainPolicyConfig
+    from coevomal.policies import RetrainingPolicy
+
+    p = RetrainingPolicy(RetrainPolicyConfig(data_selection="hard_mining", buffer_size=2))
+
+    class _Weak:                      # early defender: everything looks benign
+        def predict_proba(self, X):
+            return np.full(X.shape[0], 0.01, dtype=np.float32)
+
+    class _Strong:                    # retrained defender: row 0 now caught
+        def predict_proba(self, X):
+            out = np.full(X.shape[0], 0.02, dtype=np.float32)
+            out[X[:, 0] == 0.0] = 0.99
+            return out
+
+    p.record(np.array([[0.0, 0.0], [1.0, 1.0]], dtype=np.float32), _Weak())
+    p.record(np.array([[2.0, 2.0]], dtype=np.float32), _Strong())
+    kept = p.buffer.as_array()
+    assert kept.shape[0] == 2
+    # Under the current defender row [0,0] is no longer a deep evasion, so the
+    # capacity-2 hard-mining buffer must have dropped it.
+    assert not any(np.allclose(r, [0.0, 0.0]) for r in kept), kept
+
+
+def test_robustness_per_cost_is_nan_without_retraining():
+    """A zero-cost baseline must not report infinite efficiency."""
+    from coevomal.evaluation.metrics import ExperimentResult, RoundLog
+
+    r = ExperimentResult(config={})
+    r.rounds.append(RoundLog(round=0, evasion_rate=0.5, attack_success_rate=0.5,
+                             pre_evasive_rate=0.0, mean_queries=1.0, retrained=False,
+                             retrain_seconds=0.0, train_samples=0,
+                             clean_accuracy=0.9, buffer_size=0))
+    assert np.isnan(r.summary()["robustness_per_cost"])

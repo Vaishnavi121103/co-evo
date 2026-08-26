@@ -105,6 +105,10 @@ class ExperimentConfig:
     rounds: int = 15
     convergence_window: int = 4      # trailing window for convergence/oscillation
     convergence_tol: float = 0.03    # evasion-rate std below which we call convergence
+    early_stop: bool = True          # stop once converged; MUST be False for the
+                                     # factorial, else policies run for different
+                                     # numbers of rounds and the cost comparison
+                                     # is no longer like-for-like
     seed: int = 0
     output_dir: str = "results"
 

@@ -66,6 +66,18 @@ class ReplayBuffer:
             self._samples = [self._samples[i] for i in order]
             self._scores = [self._scores[i] for i in order]
 
+    def rescore(self, defender) -> None:
+        """Re-evaluate every buffered sample under the current defender.
+
+        Only meaningful for ``hard_mining``, whose selection is a ranking over
+        these scores; re-applies the capacity rule afterwards.
+        """
+        if not self._samples:
+            return
+        X = np.vstack(self._samples)
+        self._scores = [float(v) for v in defender.predict_proba(X)]
+        self._enforce()
+
     def as_array(self) -> np.ndarray:
         if not self._samples:
             return np.empty((0,), dtype=np.float32)
@@ -99,7 +111,21 @@ class RetrainingPolicy:
 
     # ---- data selection -----------------------------------------------------
     def record(self, evasive_samples: np.ndarray, defender) -> None:
-        """Add newly discovered evasive samples to the replay buffer."""
+        """Add newly discovered evasive samples to the replay buffer.
+
+        For ``hard_mining`` the whole buffer is re-scored against the *current*
+        defender, not just the new arrivals. Scores recorded in earlier rounds
+        were produced by a defender that has since been retrained, so ranking
+        a mixed buffer on them compares numbers from different models and the
+        "hardest" selection silently drifts toward whatever was inserted when
+        the defender happened to be weakest.
+        """
+        # Refresh the existing buffer *before* inserting, so the capacity rule
+        # below ranks old and new samples on scores from the same (current)
+        # model. Rescoring afterwards would be too late: the trim would already
+        # have run against stale numbers.
+        if self.cfg.data_selection == "hard_mining":
+            self.buffer.rescore(defender)
         if evasive_samples.size == 0:
             return
         scores = defender.predict_proba(evasive_samples)

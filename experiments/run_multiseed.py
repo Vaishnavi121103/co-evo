@@ -34,7 +34,10 @@ from coevomal.orchestrator import CoEvolutionOrchestrator
 
 CADENCES = ["every_round", "every_n", "threshold"]
 DATA_SELECTION = ["full_replay", "hard_mining", "bounded_buffer"]
-ATTACKERS = ["dqn"]
+# Attacker axis. Defaults to whatever the base config specifies -- hardcoding
+# it here would silently override the configured attacker and mislabel every
+# result row. Pass --attackers to sweep the attacker axis explicitly.
+DEFAULT_ATTACKERS: list[str] | None = None
 
 # Metrics we aggregate across seeds.
 METRICS = [
@@ -75,6 +78,7 @@ def run_multiseed(
     seeds: int = 5,
     quiet: bool = True,
     seed_start: int = 0,
+    attackers: list[str] | None = None,
 ) -> Path:
     """Run the sweep for seeds ``[seed_start, seeds)``, resuming if possible.
 
@@ -85,7 +89,8 @@ def run_multiseed(
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    combos = list(itertools.product(ATTACKERS, CADENCES, DATA_SELECTION))
+    attackers = attackers or DEFAULT_ATTACKERS or [base.attacker.name]
+    combos = list(itertools.product(attackers, CADENCES, DATA_SELECTION))
     raw_path = out_dir / "multiseed_raw.csv"
     raw_rows: list[dict] = _load_existing(raw_path)
     done = {(r["policy"], int(r["seed"])) for r in raw_rows}
@@ -93,11 +98,23 @@ def run_multiseed(
         print(f"resuming: {len(done)} cells already complete in {raw_path}", flush=True)
 
     def _flush_raw() -> None:
-        """Persist after every seed so a long sweep is never all-or-nothing."""
+        """Persist after every cell so a long sweep is never all-or-nothing.
+
+        Uses the *union* of keys across rows: a resumed run may carry rows
+        written before METRICS gained a column, and csv.DictWriter raises on
+        any key absent from its fieldnames. Taking the union (and filling
+        gaps with NaN) means a staged study survives changes to the metric
+        set between stages instead of losing the completed work.
+        """
         if not raw_rows:
             return
+        fieldnames: list[str] = []
+        for r in raw_rows:
+            for k in r:
+                if k not in fieldnames:
+                    fieldnames.append(k)
         with raw_path.open("w", newline="", encoding="utf-8") as fh:
-            w = csv.DictWriter(fh, fieldnames=list(raw_rows[0].keys()))
+            w = csv.DictWriter(fh, fieldnames=fieldnames, restval="")
             w.writeheader()
             w.writerows(raw_rows)
 
@@ -150,12 +167,20 @@ def run_multiseed(
     for atk, cadence, selection in combos:
         policy = f"{atk}__{cadence}__{selection}"
         cells = [r for r in raw_rows if r["policy"] == policy]
+        if not cells:
+            continue
         agg = {"policy": policy, "attacker": atk, "cadence": cadence,
                "data_selection": selection, "n_seeds": len(cells)}
         for m in METRICS:
-            vals = np.array([r[m] for r in cells], dtype=float)
-            agg[f"{m}_mean"] = float(np.nanmean(vals))
-            agg[f"{m}_std"] = float(np.nanstd(vals))
+            vals = np.array(
+                [r.get(m, float("nan")) for r in cells], dtype=float
+            )
+            if vals.size == 0 or np.all(np.isnan(vals)):
+                agg[f"{m}_mean"] = float("nan")
+                agg[f"{m}_std"] = float("nan")
+            else:
+                agg[f"{m}_mean"] = float(np.nanmean(vals))
+                agg[f"{m}_std"] = float(np.nanstd(vals))
         # convenience for the frontier plot
         agg["mean_evasion_tail"] = agg["mean_evasion_tail_mean"]
         agg["total_retrain_seconds"] = agg["total_retrain_seconds_mean"]
@@ -185,11 +210,15 @@ def main() -> None:
     p.add_argument("--seeds", type=int, default=5, help="run seeds [seed-start, seeds)")
     p.add_argument("--seed-start", type=int, default=0)
     p.add_argument("--out", type=str, default="results/multiseed")
+    p.add_argument("--attackers", type=str, default=None,
+                   help="comma-separated attacker axis; defaults to the config's")
     p.add_argument("--verbose", action="store_true")
     args = p.parse_args()
     base = ExperimentConfig.from_yaml(args.config)
+    atk = args.attackers.split(",") if args.attackers else None
     run_multiseed(base, out_dir=Path(args.out), seeds=args.seeds,
-                  quiet=not args.verbose, seed_start=args.seed_start)
+                  quiet=not args.verbose, seed_start=args.seed_start,
+                  attackers=atk)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,10 @@
 # Single showcase co-evolution run on REAL EMBER-2018 (Stage A sanity run).
 # Verifies the round-by-round dynamics before committing to the factorial sweep.
-name: ember_pilot_v3
+name: ember_pilot_v5
 rounds: 8
 convergence_window: 4
 convergence_tol: 0.03
+early_stop: false        # equal horizon for every policy
 seed: 0
 output_dir: results
 
@@ -31,7 +32,11 @@ defender:
   learning_rate: 0.08
 
 attacker:
-  name: dqn             # the attacker must ADAPT each round for the game to iterate
+  # Stochastic mimicry over per-episode benign exemplars. Chosen because it
+  # applies far stronger and more stable pressure than the RL agents at any
+  # feasible budget (0.21 vs DQN 0.018 round-0 attack success); DQN and PPO
+  # remain implemented and are compared in docs/methodology_findings.md.
+  name: random
   train_episodes: 100
   train_every: 4
   device: auto

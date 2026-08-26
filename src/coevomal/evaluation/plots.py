@@ -19,25 +19,35 @@ def plot_run(result: ExperimentResult, out_path: str | Path, title: str = "") ->
 
     rounds = [r.round for r in result.rounds]
     eva = result.evasion_rates
+    asr = [r.attack_success_rate for r in result.rounds]
+    pre = [r.pre_evasive_rate for r in result.rounds]
     queries = result.mean_queries
     clean = [r.clean_accuracy for r in result.rounds]
     retrain_rounds = [r.round for r in result.rounds if r.retrained]
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 7), sharex=True)
 
-    ax1.plot(rounds, eva, marker="o", label="evasion rate")
-    ax1.plot(rounds, clean, marker="s", linestyle="--", label="clean accuracy")
+    # Grey bands mark rounds where the defender actually retrained, so the
+    # cadence policy is readable straight off the plot.
     for rr in retrain_rounds:
         ax1.axvline(rr, color="grey", alpha=0.15)
+    ax1.plot(rounds, eva, marker="o", label="evasion rate")
+    # Separating attack success from the defender's pre-existing false
+    # negatives keeps the attacker from being credited with the classifier's
+    # own misses.
+    ax1.plot(rounds, asr, marker="v", label="attack success (of samples caught)")
+    ax1.plot(rounds, pre, marker="x", linestyle=":", alpha=0.7,
+             label="pre-evasive (defender FN)")
+    ax1.plot(rounds, clean, marker="s", linestyle="--", label="clean accuracy")
     ax1.set_ylabel("rate")
     ax1.set_ylim(-0.02, 1.02)
-    ax1.legend(loc="upper right")
+    ax1.legend(loc="center right", fontsize=8)
     ax1.set_title(title or "Co-evolution dynamics")
 
     ax2.plot(rounds, queries, marker="^", color="tab:red", label="mean queries/sample")
     ax2.set_xlabel("round")
     ax2.set_ylabel("attacker queries")
-    ax2.legend(loc="upper right")
+    ax2.legend(loc="upper right", fontsize=8)
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=120)

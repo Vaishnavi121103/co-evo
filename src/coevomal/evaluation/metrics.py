@@ -122,12 +122,15 @@ class ExperimentResult:
             "max_evasion_rate": max(rates) if rates else float("nan"),
             "total_retrain_seconds": retrain_secs,
             "retrain_count": retrain_count,
-            # robustness-per-cost: lower tail evasion per retrain-second is
-            # better. Guard against divide-by-zero for no-retrain baselines.
+            # Robustness bought per second of retraining. A no-retrain
+            # baseline has zero cost, so the ratio is undefined rather than
+            # infinite -- reporting inf would make that policy look optimal
+            # and would poison any mean taken over seeds. NaN keeps it out of
+            # the aggregate, and the frozen baseline is compared on evasion.
             "robustness_per_cost": (
                 (1.0 - float(np.mean(tail))) / retrain_secs
                 if retrain_secs > 0
-                else float("inf")
+                else float("nan")
             ),
         }
 

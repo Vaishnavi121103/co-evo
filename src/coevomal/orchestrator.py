@@ -104,8 +104,23 @@ class CoEvolutionOrchestrator:
         self.result = ExperimentResult(config=cfg.to_dict())
 
     # ---- helpers ------------------------------------------------------------
-    def _make_env(self, defender_snapshot) -> MalwareEvasionEnv:
+    def _make_env(self, defender_snapshot, round_idx: int = 0,
+                  purpose: str = "train") -> MalwareEvasionEnv:
+        """Build an evasion environment around a frozen defender snapshot.
+
+        The environment RNG is seeded per round and per purpose. Reusing one
+        seed for every round would make the attacker draw the *same* benign
+        exemplars and follow the same trajectories each round, so it would
+        keep re-attacking a region the defender has already been retrained on
+        -- the defender then appears to win by memorising a handful of points
+        rather than by generalising, and evasion collapses for the wrong
+        reason. Training and evaluation are also decorrelated so the attacker
+        is not scored on precisely the episodes it just trained on.
+        """
         e = self.cfg.env
+        env_seed = (int(self.cfg.seed) * 100_003
+                    + int(round_idx) * 17
+                    + (0 if purpose == "train" else 1))
         return MalwareEvasionEnv(
             defender=defender_snapshot,
             malicious_pool=self.dataset.malicious(),
@@ -117,7 +132,7 @@ class CoEvolutionOrchestrator:
             reward_evade_bonus=e.reward_evade_bonus,
             reward_step_penalty=e.reward_step_penalty,
             reward_mode=e.reward_mode,
-            seed=self.cfg.seed,
+            seed=env_seed,
             directions=self.directions,
             benign_pool=self.benign_pool,
         )
@@ -144,12 +159,12 @@ class CoEvolutionOrchestrator:
         for rnd in range(self.cfg.rounds):
             # 1-2. attacker trains against a frozen snapshot
             snapshot = self.defender.snapshot()
-            env = self._make_env(snapshot)
+            env = self._make_env(snapshot, round_idx=rnd, purpose="train")
             self.attacker.reset_policy()
             self.attacker.train(env, episodes=self.cfg.attacker.train_episodes)
 
             # 3. evaluate evasion on held-out malicious pool
-            eval_env = self._make_env(snapshot)
+            eval_env = self._make_env(snapshot, round_idx=rnd, purpose="eval")
             res = self.attacker.evaluate_evasion(eval_env, self.test_malicious)
 
             # 4. record discovered evasions
@@ -193,7 +208,8 @@ class CoEvolutionOrchestrator:
             # early stop on convergence
             osc = oscillation_index(self.result.evasion_rates, self.cfg.convergence_window)
             if (
-                rnd + 1 >= self.cfg.convergence_window
+                self.cfg.early_stop
+                and rnd + 1 >= self.cfg.convergence_window
                 and osc <= self.cfg.convergence_tol
             ):
                 self._log(f"[converged] oscillation_index={osc:.4f} <= tol at round {rnd}")
