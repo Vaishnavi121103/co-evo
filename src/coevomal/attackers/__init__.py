@@ -23,6 +23,7 @@ def make_attacker(cfg: AttackerConfig, obs_dim: int, n_actions: int) -> Attacker
             buffer_size=cfg.buffer_size,
             batch_size=cfg.batch_size,
             target_sync=cfg.target_sync,
+            train_every=cfg.train_every,
             device=cfg.device,
             seed=cfg.seed,
         )

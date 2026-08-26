@@ -42,6 +42,7 @@ class EnvConfig:
     evade_threshold: float = 0.5     # defender prob below which a sample is "benign"
     reward_evade_bonus: float = 10.0
     reward_step_penalty: float = 0.02
+    reward_mode: str = "logit"       # {"logit", "prob"} -- logit avoids saturation
 
 
 @dataclass
@@ -75,6 +76,7 @@ class AttackerConfig:
     buffer_size: int = 10000
     batch_size: int = 64
     target_sync: int = 200
+    train_every: int = 4             # gradient step every N env steps (standard DQN)
     # PPO:
     ppo_epochs: int = 4
     clip: float = 0.2

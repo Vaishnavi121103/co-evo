@@ -53,6 +53,7 @@ class DQNAttacker(Attacker):
         buffer_size: int = 10000,
         batch_size: int = 64,
         target_sync: int = 200,
+        train_every: int = 4,
         device: str = "auto",
         seed: int = 0,
     ) -> None:
@@ -61,6 +62,11 @@ class DQNAttacker(Attacker):
         self.gamma = float(gamma)
         self.batch_size = int(batch_size)
         self.target_sync = int(target_sync)
+        # Gradient step every `train_every` environment steps. Updating on
+        # every step is both slower and not what the standard DQN recipe does
+        # (the original Atari DQN updates once per 4 frames).
+        self.train_every = max(1, int(train_every))
+        self._env_steps = 0
         self.epsilon = float(epsilon_start)
         self.epsilon_end = float(epsilon_end)
         self.epsilon_decay = float(epsilon_decay)
@@ -132,5 +138,7 @@ class DQNAttacker(Attacker):
                 nxt, reward, done, _info = env.step(action)
                 self.buffer.append((obs, action, reward, nxt, float(done)))
                 obs = nxt
-                self._optimise()
+                self._env_steps += 1
+                if self._env_steps % self.train_every == 0:
+                    self._optimise()
             self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)

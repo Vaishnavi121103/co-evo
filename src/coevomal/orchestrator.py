@@ -106,6 +106,7 @@ class CoEvolutionOrchestrator:
             evade_threshold=e.evade_threshold,
             reward_evade_bonus=e.reward_evade_bonus,
             reward_step_penalty=e.reward_step_penalty,
+            reward_mode=e.reward_mode,
             seed=self.cfg.seed,
             directions=self.directions,
         )
