@@ -52,7 +52,11 @@ class CoEvolutionOrchestrator:
             )
         elif d.name == "ember":
             self.dataset, self.test_malicious = load_ember(
-                d.ember_path, mutable_fraction=d.mutable_fraction, seed=d.seed
+                d.ember_path,
+                n_train=d.n_train,
+                n_test_malicious=d.n_test_malicious,
+                mutable_fraction=d.mutable_fraction,
+                seed=d.seed,
             )
         else:
             raise ValueError(f"unknown dataset '{d.name}'")
@@ -137,6 +141,8 @@ class CoEvolutionOrchestrator:
             log = RoundLog(
                 round=rnd,
                 evasion_rate=res.evasion_rate,
+                attack_success_rate=res.attack_success_rate,
+                pre_evasive_rate=res.pre_evasive_rate,
                 mean_queries=res.mean_queries,
                 retrained=retrained,
                 retrain_seconds=retrain_seconds,
@@ -147,6 +153,8 @@ class CoEvolutionOrchestrator:
             self.result.rounds.append(log)
             self._log(
                 f"[round {rnd:02d}] evasion={res.evasion_rate:.3f} "
+                f"attack_succ={res.attack_success_rate:.3f} "
+                f"pre_evasive={res.pre_evasive_rate:.3f} "
                 f"queries={res.mean_queries:.1f} "
                 f"retrained={'Y' if retrained else '-'} "
                 f"clean_acc={log.clean_accuracy:.3f} "

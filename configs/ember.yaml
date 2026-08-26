@@ -1,0 +1,54 @@
+# Single co-evolution experiment on the REAL EMBER-2018 dataset.
+# Expects the extracted EMBER JSONL under `data/ember/` (train_features_*.jsonl,
+# test_features.jsonl). The first run vectorizes + caches a balanced subsample.
+name: ember_default
+rounds: 12
+convergence_window: 4
+convergence_tol: 0.03
+seed: 0
+output_dir: results
+
+dataset:
+  name: ember
+  ember_path: data/ember
+  n_train: 20000          # balanced subsample (10k benign / 10k malicious)
+  n_test_malicious: 1000  # held-out malicious pool the attacker probes
+  mutable_fraction: 0.5   # fraction of add-eligible features the attacker may perturb
+  seed: 0
+
+env:
+  n_actions: 16
+  max_steps: 60           # larger budget: EMBER's GBDT is a strong defender
+  step_scale: 0.4
+  evade_threshold: 0.5
+  reward_evade_bonus: 10.0
+  reward_step_penalty: 0.02
+
+defender:
+  name: gbdt
+  max_iter: 200
+  learning_rate: 0.05
+  seed: 0
+
+attacker:
+  name: dqn
+  train_episodes: 300
+  gamma: 0.95
+  lr: 0.001
+  hidden: 128
+  epsilon_start: 1.0
+  epsilon_end: 0.05
+  epsilon_decay: 0.995
+  buffer_size: 20000
+  batch_size: 128
+  target_sync: 250
+  device: auto
+  seed: 0
+
+retrain:
+  cadence: every_round
+  every_n: 3
+  trigger_threshold: 0.3
+  data_selection: full_replay
+  buffer_size: 5000
+  mode: scratch

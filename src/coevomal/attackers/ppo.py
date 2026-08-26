@@ -75,6 +75,15 @@ class PPOAttacker(Attacker):
                 return int(torch.argmax(logits, dim=1).item())
             return int(Categorical(logits=logits).sample().item())
 
+    def act_batch(self, obs: np.ndarray, greedy: bool = True) -> np.ndarray:
+        """Batched action selection (single forward pass)."""
+        with torch.no_grad():
+            t = torch.as_tensor(np.asarray(obs), dtype=torch.float32, device=self.device)
+            logits, _ = self.net(t)
+            if greedy:
+                return torch.argmax(logits, dim=1).cpu().numpy().astype(np.int64)
+            return Categorical(logits=logits).sample().cpu().numpy().astype(np.int64)
+
     def _act_train(self, obs: np.ndarray):
         t = torch.as_tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)
         logits, value = self.net(t)

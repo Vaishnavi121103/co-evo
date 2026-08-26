@@ -7,8 +7,14 @@ cluster do not provide.
 
 Per-round we log:
 
-* ``evasion_rate``   -- fraction of the held-out malicious pool the attacker
-  drives below the defender threshold (primary outcome).
+* ``evasion_rate``   -- fraction of the held-out malicious pool the defender
+  ends up calling benign (primary outcome).
+* ``attack_success_rate`` -- of the samples the defender initially *caught*,
+  the fraction the attacker flipped. This isolates attacker strength from the
+  defender's baseline false negatives and is the cleaner signal when comparing
+  retraining policies.
+* ``pre_evasive_rate`` -- the defender's baseline false-negative rate on the
+  pool, before any mutation.
 * ``mean_queries``   -- attacker query complexity: mean defender queries per
   sample; rising values mean evasion is getting *harder*.
 * ``retrained``      -- whether the defender retrained this round.
@@ -41,6 +47,8 @@ import numpy as np
 class RoundLog:
     round: int
     evasion_rate: float
+    attack_success_rate: float
+    pre_evasive_rate: float
     mean_queries: float
     retrained: bool
     retrain_seconds: float
@@ -101,7 +109,11 @@ class ExperimentResult:
         retrain_secs = sum(r.retrain_seconds for r in self.rounds)
         retrain_count = sum(1 for r in self.rounds if r.retrained)
         tail = rates[-window:] if rates else [0.0]
+        asr = [r.attack_success_rate for r in self.rounds]
+        asr_tail = asr[-window:] if asr else [0.0]
         return {
+            "mean_attack_success_tail": float(np.mean(asr_tail)),
+            "final_attack_success_rate": asr[-1] if asr else float("nan"),
             "oscillation_index": oscillation_index(rates, window),
             "rounds_to_convergence": conv,
             "converged": conv is not None,

@@ -119,18 +119,27 @@ def make_synthetic(
     return Dataset(X=X, y=y, feature_space=fs), test_mal
 
 
-def load_ember(ember_path: str, mutable_fraction: float = 0.6, seed: int = 0):
-    """Load real EMBER feature vectors (extension point).
+def load_ember(
+    ember_path: str,
+    n_train: int = 20000,
+    n_test_malicious: int = 1000,
+    mutable_fraction: float = 0.5,
+    seed: int = 0,
+):
+    """Load real EMBER-2018 feature vectors.
 
-    EMBER ships as vectorized ``X_train`` / ``y_train`` arrays. Wire them in
-    here and the orchestrator, attacker, defender, and metrics all work
-    unchanged. Left as a documented stub because EMBER is an external ~10GB
-    download and is not required for the synthetic policy study.
+    Thin wrapper around :func:`coevomal.environment.ember_loader.load_ember_dataset`
+    (imported lazily so the synthetic path never pays for it). ``ember_path``
+    is the directory holding the extracted ``train_features_*.jsonl`` /
+    ``test_features.jsonl``. Returns a ``(Dataset, test_malicious)`` tuple
+    exactly like :func:`make_synthetic`.
     """
-    raise NotImplementedError(
-        "Real EMBER loading is an intentional extension point. Populate "
-        "`X, y` from the EMBER vectorized features at "
-        f"'{ember_path}', build a FeatureSpace over the byte/section/import "
-        "features that gym-malware can additively mutate, and return a "
-        "(Dataset, test_malicious) tuple mirroring make_synthetic()."
+    from coevomal.environment.ember_loader import load_ember_dataset
+
+    return load_ember_dataset(
+        data_dir=ember_path,
+        n_train=n_train,
+        n_test_malicious=n_test_malicious,
+        mutable_fraction=mutable_fraction,
+        seed=seed,
     )

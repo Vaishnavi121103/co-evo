@@ -29,3 +29,6 @@ Thumbs.db
 # Tooling
 .pytest_cache/
 .mypy_cache/
+
+# EMBER dataset (multi-GB, downloadable) - never commit
+data/ember/

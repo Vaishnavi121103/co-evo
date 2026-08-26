@@ -86,6 +86,17 @@ class DQNAttacker(Attacker):
             q = self.q(t.unsqueeze(0))
             return int(torch.argmax(q, dim=1).item())
 
+    def act_batch(self, obs: np.ndarray, greedy: bool = True) -> np.ndarray:
+        """Batched greedy action selection (single forward pass)."""
+        with torch.no_grad():
+            t = torch.as_tensor(np.asarray(obs), dtype=torch.float32, device=self.device)
+            q = self.q(t)
+            actions = torch.argmax(q, dim=1).cpu().numpy().astype(np.int64)
+        if not greedy:
+            explore = self.rng.random(actions.shape[0]) < self.epsilon
+            actions[explore] = self.rng.integers(0, self.n_actions, size=int(explore.sum()))
+        return actions
+
     # ---- learning -----------------------------------------------------------
     def _optimise(self) -> None:
         if len(self.buffer) < self.batch_size:

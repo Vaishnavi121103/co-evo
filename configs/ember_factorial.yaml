@@ -1,0 +1,47 @@
+# Base config for the factorial retraining-policy sweep on REAL EMBER-2018.
+# run_factorial.py / run_multiseed.py override attacker.name, retrain.cadence,
+# and retrain.data_selection per cell; everything else is held fixed so the
+# policy variable is isolated. Smaller subsample + fewer rounds than a single
+# showcase run because the sweep multiplies cost by (cells x seeds).
+name: ember_factorial_base
+rounds: 10
+convergence_window: 4
+convergence_tol: 0.03
+seed: 0
+output_dir: results/ember_factorial
+
+dataset:
+  name: ember
+  ember_path: data/ember
+  n_train: 12000
+  n_test_malicious: 500
+  mutable_fraction: 0.5
+  seed: 0
+
+env:
+  n_actions: 14
+  max_steps: 50
+  step_scale: 0.4
+  evade_threshold: 0.5
+
+defender:
+  name: gbdt
+  max_iter: 150
+  learning_rate: 0.05
+
+attacker:
+  name: dqn
+  train_episodes: 200
+  hidden: 128
+  buffer_size: 20000
+  batch_size: 128
+  device: auto
+  seed: 0
+
+retrain:
+  cadence: every_round
+  every_n: 3
+  trigger_threshold: 0.3
+  data_selection: full_replay
+  buffer_size: 4000
+  mode: scratch

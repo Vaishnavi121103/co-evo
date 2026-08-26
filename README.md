@@ -68,7 +68,11 @@ convergence / oscillation / cost is attributable to a single policy variable.
 
 ## Key metrics (`src/coevomal/evaluation/metrics.py`)
 
-- **evasion rate** per round — primary outcome
+- **evasion rate** per round — fraction of the malicious pool the defender ends up calling benign
+- **attack success rate** — of the samples the defender *initially caught*, the fraction the attacker
+  flipped. Reported separately from **pre-evasive rate** (the defender's baseline false negatives),
+  because conflating the two overstates the attacker: a sample the classifier already misses is not
+  an attack success. This is the cleaner signal when comparing retraining policies.
 - **oscillation index** — trailing-window std of evasion rate (converged vs. chasing)
 - **rounds-to-convergence** — or `None` for divergence
 - **attacker query complexity** — mean defender queries per evasion (difficulty)
@@ -102,14 +106,47 @@ pip install pytest
 pytest            # unit tests for metrics, policies, environment + an end-to-end smoke run
 ```
 
-## Extending to real data
+## Running on the real EMBER-2018 dataset
 
-1. **Real EMBER defender:** implement `environment/dataset.py::load_ember` to return a `Dataset` +
-   held-out malicious pool from the EMBER vectorized features; set `dataset.name: ember` in a config.
-2. **Real PE-mutation attacker:** re-implement `MalwareEvasionEnv.reset/step` around gym-malware /
-   MAB-malware PE rewriting, keeping the same interface; the orchestrator, policies, and metrics are
-   unchanged.
-3. **Exact EMBER model:** swap `GBDTDefender`'s backend for LightGBM (optional dependency).
+The real-data path is **implemented**, not just a stub.
+
+```bash
+# 1. Download EMBER-2018 (v2), ~1.6 GB, into data/ember/
+curl -L -C - -o data/ember/ember2018.tar.bz2 https://ember.elastic.co/ember_dataset_2018_2.tar.bz2
+
+# 2. Extract the raw-feature JSONL
+tar -xjf data/ember/ember2018.tar.bz2 -C data/ember/
+
+# 3. Run — the first run vectorizes + caches a balanced subsample, then co-evolves
+python -m coevomal run --config configs/ember.yaml
+
+# 4. The real-data factorial policy study, multi-seed (mean ± std for publication)
+python experiments/run_multiseed.py --config configs/ember_factorial.yaml --seeds 5 \
+    --out results/ember_multiseed
+```
+
+How it works (`environment/ember_loader.py`):
+
+- EMBER ships **already-extracted** raw features as JSON. We vectorize them with EMBER's *own*
+  official vectorizer (vendored in `environment/ember_features.py`, `feature_version=2` → the
+  canonical **2381-dim** vector), so no `lief` and no `ember` package install is required — it runs
+  clean on Python 3.13.
+- We draw a **balanced subsample** (configurable) and **z-score** it; a full 600k-sample factorial ×
+  multi-seed study is intractable, and every policy sees the identical subsample so the *comparison*
+  is unbiased. Tree ensembles are scale-invariant, so standardization only makes the attack
+  well-posed, it doesn't change the defender.
+- The attacker may additively mutate only the feature blocks an append/add-style,
+  functionality-preserving mutation can plausibly grow (byte histogram, byte-entropy, strings,
+  sections, imports); header/optional-header/exports/data-directories are structural and immutable.
+
+**Limitation (stated for the thesis):** this is the *feature-space* study — the attacker perturbs
+EMBER feature vectors, not raw PE bytes. A raw-binary attacker (gym-malware / MAB-malware around
+`MalwareEvasionEnv.reset/step`) needs actual malware binaries under institutional/legal sign-off and
+VM isolation, per the roadmap's risk register. The feature-space formulation is standard and
+publishable in this line of work.
+
+**Exact EMBER model:** swap `GBDTDefender`'s backend for LightGBM (optional dependency) if you need
+the exact reference classifier rather than the scikit-learn histogram GBDT.
 
 ## License
 
