@@ -35,7 +35,7 @@ class DatasetConfig:
 class EnvConfig:
     """Configuration for the malware evasion environment."""
 
-    action_space: str = "mimicry"    # {"mimicry", "random"} -- see build_mimicry_directions
+    action_space: str = "exemplar"   # {"exemplar", "mimicry", "random"}
     n_actions: int = 12              # discrete functionality-preserving mutations
     max_steps: int = 30              # attacker budget per sample (query budget)
     step_scale: float = 0.25         # magnitude of a single mutation

@@ -21,12 +21,12 @@ dataset:
   name: ember
   ember_path: data/ember
   n_train: 8000            # balanced subsample (4k benign / 4k malicious)
-  n_test_malicious: 300    # held-out malicious pool, from EMBER's test split
+  n_test_malicious: 600    # held-out malicious pool, from EMBER's test split
   mutable_fraction: 0.5
   seed: 0
 
 env:
-  action_space: mimicry    # block-wise benign-mimicry directions
+  action_space: exemplar   # per-episode mimicry of a random benign file
   n_actions: 16
   max_steps: 60            # attacker query budget per sample
   step_scale: 4.0
@@ -61,5 +61,9 @@ retrain:
   every_n: 3
   trigger_threshold: 0.3
   data_selection: full_replay
-  buffer_size: 4000
+  # Cap chosen so it BINDS: with ~100-150 evasions found per round, an
+  # oversized cap makes full_replay / hard_mining / bounded_buffer collect
+  # identical data and the data-selection axis cannot differentiate at all.
+  # It also models a real vendor's bounded adversarial-retraining budget.
+  buffer_size: 200
   mode: scratch

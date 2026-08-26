@@ -76,7 +76,8 @@ class Attacker(ABC):
 
     # ---- shared evaluation --------------------------------------------------
     def evaluate_evasion(
-        self, env: MalwareEvasionEnv, malicious_pool: np.ndarray
+        self, env: MalwareEvasionEnv, malicious_pool: np.ndarray,
+        greedy: bool = True,
     ) -> EvasionResult:
         """Greedily roll out the learned policy over ``malicious_pool``.
 
@@ -85,7 +86,7 @@ class Attacker(ABC):
         batched defender queries.
         """
         evaded, queries, final_x, initial_evaded = env.batch_rollout(
-            self, malicious_pool
+            self, malicious_pool, greedy=greedy
         )
         n = malicious_pool.shape[0]
         samples = (

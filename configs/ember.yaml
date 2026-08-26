@@ -1,8 +1,7 @@
-# Single co-evolution experiment on the REAL EMBER-2018 dataset.
-# Expects the extracted EMBER JSONL under `data/ember/` (train_features_*.jsonl,
-# test_features.jsonl). The first run vectorizes + caches a balanced subsample.
-name: ember_default
-rounds: 12
+# Single showcase co-evolution run on REAL EMBER-2018 (Stage A sanity run).
+# Verifies the round-by-round dynamics before committing to the factorial sweep.
+name: ember_pilot_v3
+rounds: 8
 convergence_window: 4
 convergence_tol: 0.03
 seed: 0
@@ -11,44 +10,39 @@ output_dir: results
 dataset:
   name: ember
   ember_path: data/ember
-  n_train: 20000          # balanced subsample (10k benign / 10k malicious)
-  n_test_malicious: 1000  # held-out malicious pool the attacker probes
-  mutable_fraction: 0.5   # fraction of add-eligible features the attacker may perturb
+  n_train: 8000
+  n_test_malicious: 600
+  mutable_fraction: 0.5
   seed: 0
 
 env:
+  action_space: exemplar   # per-episode mimicry of a random benign file
   n_actions: 16
-  max_steps: 60           # larger budget: EMBER's GBDT is a strong defender
-  step_scale: 0.4
+  max_steps: 60
+  step_scale: 4.0
   evade_threshold: 0.5
+  reward_mode: logit
   reward_evade_bonus: 10.0
   reward_step_penalty: 0.02
 
 defender:
   name: gbdt
-  max_iter: 200
-  learning_rate: 0.05
-  seed: 0
+  max_iter: 80
+  learning_rate: 0.08
 
 attacker:
-  name: dqn
-  train_episodes: 300
-  gamma: 0.95
-  lr: 0.001
-  hidden: 128
-  epsilon_start: 1.0
-  epsilon_end: 0.05
-  epsilon_decay: 0.995
-  buffer_size: 20000
-  batch_size: 128
-  target_sync: 250
+  name: dqn             # the attacker must ADAPT each round for the game to iterate
+  train_episodes: 100
+  train_every: 4
   device: auto
   seed: 0
 
 retrain:
   cadence: every_round
-  every_n: 3
-  trigger_threshold: 0.3
   data_selection: full_replay
-  buffer_size: 5000
+  # Cap chosen so it BINDS: with ~100-150 evasions found per round, an
+  # oversized cap makes full_replay / hard_mining / bounded_buffer collect
+  # identical data and the data-selection axis cannot differentiate at all.
+  # It also models a real vendor's bounded adversarial-retraining budget.
+  buffer_size: 200
   mode: scratch

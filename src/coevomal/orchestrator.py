@@ -75,6 +75,16 @@ class CoEvolutionOrchestrator:
 
         # Semantic (mimicry) action set, derived once from the clean training
         # data so every round and every policy shares the same action space.
+        # "exemplar" (default): actions are rebuilt each episode against a
+        # randomly drawn benign file, so the attack is not confined to one
+        # fixed cone the defender can close in a single retraining round.
+        # "mimicry": one fixed action set from the global benign mean.
+        # "random": undirected perturbations (does not scale past ~10^2 dims).
+        self.benign_pool = (
+            self.X_train[self.y_train == 0]
+            if cfg.env.action_space == "exemplar"
+            else None
+        )
         self.directions = (
             build_mimicry_directions(
                 self.X_train, self.y_train, self.feature_space,
@@ -109,6 +119,7 @@ class CoEvolutionOrchestrator:
             reward_mode=e.reward_mode,
             seed=self.cfg.seed,
             directions=self.directions,
+            benign_pool=self.benign_pool,
         )
 
     def _clean_accuracy(self) -> float:
