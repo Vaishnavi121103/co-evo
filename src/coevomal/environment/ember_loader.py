@@ -42,19 +42,46 @@ from sklearn.preprocessing import StandardScaler
 from coevomal.environment.dataset import BENIGN, MALICIOUS, Dataset, FeatureSpace
 from coevomal.environment.ember_features import PEFeatureExtractor
 
-# Feature blocks an append/add-style mutation can plausibly touch.
-ADDITIVE_BLOCKS = {"histogram", "byteentropy", "strings", "section", "imports"}
-
-# Within those blocks, only a *few* features are genuine monotone counters that
-# an append-only mutation can solely increase. The rest are either normalized
-# (the byte and byte-entropy histograms sum to 1, so raising one bin lowers
-# others) or produced by ``FeatureHasher``, which emits *signed* values -- so
-# adding an import or a section can move a hashed feature in either direction.
-# Modelling every mutable feature as add-only is therefore unfaithful to the
-# real extractor, and it also makes the attack impossible, since it can only
-# ever push a sample further into malicious territory.
+# ---------------------------------------------------------------------------
+# What a functionality-preserving PE modification can actually change.
 #
-# Offsets are relative to each block's start (see PEFeatureExtractor layout).
+# This is the most consequential modelling choice in the harness. Measured on
+# real EMBER-2018: if the attacker is barred from `general`, `datadirectories`
+# and `exports`, a classifier trained on the frozen remainder *alone* still
+# reaches 0.970 accuracy. Adversarial retraining then just learns to lean on
+# features the attacker can never touch, evasion collapses to zero within two
+# rounds, and every retraining policy ties at zero -- the comparison becomes
+# vacuous. The outcome would be decided by the mutability assumption rather
+# than by the policy under study.
+#
+# It is also wrong on the merits: appending bytes or adding a section provably
+# changes file size and virtual size (`general`) and the section/import table
+# sizes and RVAs (`datadirectories`); exports can be added; and most header
+# fields are free-form metadata (timestamp, linker/image/OS versions,
+# sizeof_*) that a packer sets at will.
+#
+# Genuinely hard to change without altering what the binary *is* are the
+# structural header fields: target machine, PE magic, subsystem, and the COFF
+# characteristics flags. Those stay frozen. A classifier restricted to them
+# scores 0.769 -- informative, but far from 0.970, so the defender must keep
+# generalising and the iterated game stays contested.
+FULLY_MUTABLE_BLOCKS = {
+    "histogram", "byteentropy", "strings", "section",
+    "imports", "general", "exports", "datadirectories",
+}
+
+# Offsets *within the 62-dim header block* that are structural, hence frozen:
+# machine (1-10), COFF characteristics (11-20), subsystem (21-30) and PE magic
+# (41-50). The timestamp (0), dll_characteristics (31-40) and the numeric
+# version / sizeof fields (51-61) stay attacker-controllable.
+HEADER_FROZEN_OFFSETS = frozenset(list(range(1, 31)) + list(range(41, 51)))
+
+# Features an add-only mutation can solely increase. Everything else in the
+# mutable set is normalized (the histograms sum to 1, so raising one bin lowers
+# others) or a signed ``FeatureHasher`` output, and so moves both ways --
+# modelling all of them as add-only is unfaithful and makes the attack
+# impossible, since it could only push samples further into malicious space.
+# Offsets are relative to each block's start.
 MONOTONE_UP = {
     # StringExtractor: [numstrings, avlength, printables, printabledist(96),
     #                   entropy, paths, urls, registry, MZ]
@@ -62,7 +89,15 @@ MONOTONE_UP = {
     # SectionInfo general counts: [n_sections, n_zero_size, n_empty_name,
     #                              n_RX, n_W]  (the rest are hashed/signed)
     "section": (0, 1, 2, 3, 4),
+    # GeneralFileInfo: [size, vsize, has_debug, exports, imports,
+    #                   has_relocations, has_resources, has_signature,
+    #                   has_tls, symbols] -- counts that only grow when
+    #                   content is added.
+    "general": (0, 1, 3, 4, 9),
 }
+
+# Backwards-compatible alias for earlier configs and tests.
+ADDITIVE_BLOCKS = FULLY_MUTABLE_BLOCKS
 
 
 def _block_offsets(extractor: PEFeatureExtractor) -> list[tuple[str, int, int]]:
@@ -208,7 +243,17 @@ def load_ember_dataset(
     eligible: list[int] = []
     monotone: set[int] = set()
     for name, start, end in offsets:
-        if name not in ADDITIVE_BLOCKS:
+        if name == "header":
+            # Partially mutable: free-form metadata (timestamp,
+            # dll_characteristics, version and sizeof fields) is
+            # attacker-controllable; structural fields are not.
+            eligible.extend(
+                start + off
+                for off in range(end - start)
+                if off not in HEADER_FROZEN_OFFSETS
+            )
+            continue
+        if name not in FULLY_MUTABLE_BLOCKS:
             continue
         eligible.extend(range(start, end))
         for off in MONOTONE_UP.get(name, ()):

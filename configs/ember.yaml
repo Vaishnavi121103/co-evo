@@ -1,6 +1,6 @@
 # Single showcase co-evolution run on REAL EMBER-2018 (Stage A sanity run).
 # Verifies the round-by-round dynamics before committing to the factorial sweep.
-name: ember_pilot_v5
+name: ember_pilot_v6
 rounds: 8
 convergence_window: 4
 convergence_tol: 0.03
@@ -13,7 +13,7 @@ dataset:
   ember_path: data/ember
   n_train: 8000
   n_test_malicious: 600
-  mutable_fraction: 0.5
+  mutable_fraction: 1.0   # attacker controls every realistically-editable feature
   seed: 0
 
 env:

@@ -23,7 +23,7 @@ dataset:
   ember_path: data/ember
   n_train: 8000            # balanced subsample (4k benign / 4k malicious)
   n_test_malicious: 600    # held-out malicious pool, from EMBER's test split
-  mutable_fraction: 0.5
+  mutable_fraction: 1.0   # attacker controls every realistically-editable feature
   seed: 0
 
 env:
@@ -42,7 +42,12 @@ defender:
   learning_rate: 0.08
 
 attacker:
-  name: dqn
+  # Stochastic mimicry over per-episode benign exemplars. Chosen because it
+  # applies far stronger and more stable pressure than the RL agents at any
+  # feasible budget (round-0 attack success 0.197 vs DQN 0.018); DQN and PPO
+  # stay implemented and are compared in docs/methodology_findings.md, and
+  # can be swept with --attackers.
+  name: random
   train_episodes: 100
   gamma: 0.95
   lr: 0.001
@@ -60,7 +65,12 @@ attacker:
 retrain:
   cadence: every_round
   every_n: 3
-  trigger_threshold: 0.3
+  # Must sit BELOW the observed peak evasion (~0.27) or the threshold policy
+  # never fires and silently degenerates into the frozen baseline. At 0.10 it
+  # fires in round 0, releases once evasion is suppressed, and re-fires if
+  # evasion creeps back -- which is exactly the retrain/relax cycle the
+  # oscillation index is meant to detect.
+  trigger_threshold: 0.10
   data_selection: full_replay
   # Cap chosen so it BINDS: with ~100-150 evasions found per round, an
   # oversized cap makes full_replay / hard_mining / bounded_buffer collect

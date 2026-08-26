@@ -5,7 +5,8 @@ round:
 
 1. **Cadence** -- *should* we retrain this round?
    ``every_round`` | ``every_n`` | ``threshold`` (retrain only when the
-   round's evasion rate exceeds a trigger).
+   round's evasion rate exceeds a trigger) | ``never`` (the frozen-classifier
+   lower bound the single-round evasion literature evaluates against).
 
 2. **Data selection** -- *on what* do we retrain?
    ``full_replay`` (base data + every evasive sample ever found) |
@@ -100,6 +101,8 @@ class RetrainingPolicy:
     def should_retrain(self, round_idx: int, evasion_rate: float) -> bool:
         """Decide whether the defender retrains this round."""
         cadence = self.cfg.cadence
+        if cadence == "never":
+            return False          # frozen-classifier baseline
         if cadence == "every_round":
             return True
         if cadence == "every_n":
@@ -107,7 +110,10 @@ class RetrainingPolicy:
             return (round_idx % max(1, self.cfg.every_n)) == 0
         if cadence == "threshold":
             return evasion_rate >= self.cfg.trigger_threshold
-        raise ValueError(f"unknown cadence '{cadence}'")
+        raise ValueError(
+            f"unknown cadence '{cadence}' "
+            "(expected 'every_round', 'every_n', 'threshold' or 'never')"
+        )
 
     # ---- data selection -----------------------------------------------------
     def record(self, evasive_samples: np.ndarray, defender) -> None:

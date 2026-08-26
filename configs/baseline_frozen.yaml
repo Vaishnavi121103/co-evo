@@ -1,7 +1,6 @@
 # Lower-bound baseline: a frozen classifier that never retrains
 # (gym-malware / MERLIN style). With cadence effectively disabled the
 # evasion rate shows what the attacker achieves against a static defender.
-# Implemented as threshold cadence with an unreachable trigger.
 name: baseline_frozen
 rounds: 15
 convergence_window: 4
@@ -36,7 +35,6 @@ attacker:
   seed: 0
 
 retrain:
-  cadence: threshold
-  trigger_threshold: 2.0   # unreachable => defender never retrains
+  cadence: never           # frozen classifier: the lower-bound baseline
   data_selection: full_replay
   mode: scratch

@@ -1,6 +1,7 @@
 """Tests for retraining policies: cadence decisions and data-selection buffers."""
 
 import numpy as np
+import pytest
 
 from coevomal.config import RetrainPolicyConfig
 from coevomal.policies import ReplayBuffer, RetrainingPolicy
@@ -107,3 +108,21 @@ def test_robustness_per_cost_is_nan_without_retraining():
                              retrain_seconds=0.0, train_samples=0,
                              clean_accuracy=0.9, buffer_size=0))
     assert np.isnan(r.summary()["robustness_per_cost"])
+
+
+def test_never_cadence_is_the_frozen_baseline():
+    """`never` must never retrain -- the frozen-classifier lower bound."""
+    from coevomal.config import RetrainPolicyConfig
+    from coevomal.policies import RetrainingPolicy
+
+    p = RetrainingPolicy(RetrainPolicyConfig(cadence="never"))
+    assert not any(p.should_retrain(r, ev) for r in range(10) for ev in (0.0, 0.5, 1.0))
+
+
+def test_unknown_cadence_raises_helpfully():
+    from coevomal.config import RetrainPolicyConfig
+    from coevomal.policies import RetrainingPolicy
+
+    p = RetrainingPolicy(RetrainPolicyConfig(cadence="weekly"))
+    with pytest.raises(ValueError, match="every_round"):
+        p.should_retrain(0, 0.5)

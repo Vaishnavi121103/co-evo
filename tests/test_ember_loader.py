@@ -11,6 +11,8 @@ import pytest
 
 from coevomal.environment.ember_loader import (
     ADDITIVE_BLOCKS,
+    FULLY_MUTABLE_BLOCKS,
+    HEADER_FROZEN_OFFSETS,
     MONOTONE_UP,
     load_ember_dataset,
 )
@@ -106,8 +108,39 @@ def test_missing_files_raises(tmp_path):
         load_ember_dataset(data_dir=tmp_path, n_train=4, n_test_malicious=2, cache=False)
 
 
-def test_additive_blocks_are_known_names():
-    assert ADDITIVE_BLOCKS == {"histogram", "byteentropy", "strings", "section", "imports"}
+def test_mutable_blocks_cover_everything_an_append_can_change():
+    """`general` and `datadirectories` must be attacker-controllable.
+
+    Appending bytes provably changes file size / virtual size, and adding a
+    section or import changes the data-directory sizes and RVAs. Freezing them
+    lets a classifier trained on the frozen remainder alone reach 0.97 on real
+    EMBER, so adversarial retraining just learns those features, evasion goes
+    to zero, and every retraining policy ties -- the study becomes vacuous.
+    """
+    assert FULLY_MUTABLE_BLOCKS == {
+        "histogram", "byteentropy", "strings", "section",
+        "imports", "general", "exports", "datadirectories",
+    }
+    assert ADDITIVE_BLOCKS == FULLY_MUTABLE_BLOCKS   # back-compat alias
+
+
+def test_only_structural_header_fields_are_frozen():
+    """Header metadata is editable; machine/characteristics/subsystem/magic are not."""
+    assert 0 not in HEADER_FROZEN_OFFSETS            # timestamp: editable
+    for off in range(31, 41):                        # dll_characteristics
+        assert off not in HEADER_FROZEN_OFFSETS
+    for off in range(51, 62):                        # version / sizeof fields
+        assert off not in HEADER_FROZEN_OFFSETS
+    for off in list(range(1, 31)) + list(range(41, 51)):
+        assert off in HEADER_FROZEN_OFFSETS          # structural
+    assert len(HEADER_FROZEN_OFFSETS) == 40
+
+
+def test_general_counters_are_add_only(tmp_path):
+    """size/vsize/imports/exports/symbols only grow when content is added."""
+    from coevomal.environment.ember_loader import MONOTONE_UP
+
+    assert MONOTONE_UP["general"] == (0, 1, 3, 4, 9)
 
 
 def test_eval_pool_disjoint_from_train_when_no_test_file(tmp_path):

@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -135,6 +136,16 @@ def analyze(raw_csv: Path, out_md: Path | None = None) -> str:
 
 
 def main() -> None:
+    # The report uses non-ASCII (+/- and arrows), which the default Windows
+    # console codepage cannot encode -- printing it would raise
+    # UnicodeEncodeError and lose the whole report. The file is always written
+    # as UTF-8; this only makes the echo to stdout safe.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--raw", required=True, help="path to multiseed_raw.csv")
     ap.add_argument("--out", default=None, help="write Markdown here")

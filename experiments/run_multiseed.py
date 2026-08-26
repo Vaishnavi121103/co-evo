@@ -91,6 +91,28 @@ def run_multiseed(
 
     attackers = attackers or DEFAULT_ATTACKERS or [base.attacker.name]
     combos = list(itertools.product(attackers, CADENCES, DATA_SELECTION))
+
+    # Echo the settings that silently invalidate a sweep if they are wrong:
+    # the wrong attacker runs the wrong experiment, early stopping leaves
+    # policies on unequal horizons, a trigger above peak evasion turns the
+    # threshold policy into the frozen baseline, and an unbound replay cap
+    # makes the three data-selection strategies collect identical data.
+    print(f"sweep: attackers={attackers} cadences={CADENCES}", flush=True)
+    print(f"       data_selection={DATA_SELECTION}", flush=True)
+    print(
+        f"       rounds={base.rounds} early_stop={base.early_stop} "
+        f"trigger={base.retrain.trigger_threshold} "
+        f"replay_cap={base.retrain.buffer_size} "
+        f"dataset={base.dataset.name} n_train={base.dataset.n_train}",
+        flush=True,
+    )
+    if base.early_stop:
+        print(
+            "WARNING: early_stop is on -- policies will run for different "
+            "numbers of rounds and the cost comparison will not be "
+            "like-for-like. Set early_stop: false for a factorial.",
+            flush=True,
+        )
     raw_path = out_dir / "multiseed_raw.csv"
     raw_rows: list[dict] = _load_existing(raw_path)
     done = {(r["policy"], int(r["seed"])) for r in raw_rows}

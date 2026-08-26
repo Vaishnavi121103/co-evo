@@ -89,7 +89,7 @@ class AttackerConfig:
 class RetrainPolicyConfig:
     """The pluggable retraining policy -- the central independent variable."""
 
-    cadence: str = "every_round"     # {"every_round", "every_n", "threshold"}
+    cadence: str = "every_round"     # {"every_round", "every_n", "threshold", "never"}
     every_n: int = 3                 # used when cadence == "every_n"
     trigger_threshold: float = 0.3   # evasion-rate trigger when cadence == "threshold"
     data_selection: str = "full_replay"  # {"full_replay", "hard_mining", "bounded_buffer"}
