@@ -14,13 +14,18 @@ The scientific contribution this supports is **not** a new attacker or defense m
 does not provide. See [`docs/roadmap.md`](docs/roadmap.md) for the full framework, novelty
 statement, and how each roadmap element maps to the code.
 
-> **Scope note.** By default the harness runs on a **synthetic, EMBER-like feature space** — fully
-> reproducible, no downloads, no live malware. This exercises the entire co-evolution loop and the
-> policy study today. Real EMBER features and a real gym-malware PE-mutation environment are
-> first-class extension points (`environment/dataset.py::load_ember`, `environment/malware_env.py`)
-> and slot in without touching the orchestrator, policies, or metrics. Any work with real malware
-> binaries must go through institutional/legal sign-off and run VM-isolated, as noted in the
-> roadmap's risk register.
+> **Scope note.** The harness runs on the **real EMBER-2018 dataset** (see below) and, by default,
+> on a synthetic EMBER-like feature space for fast iteration with no downloads. Both use the same
+> orchestrator, policies and metrics. The attack is **feature-space**: a real gym-malware PE-rewriting
+> environment is a first-class extension point (`environment/malware_env.py`), but working with actual
+> malware binaries requires institutional/legal sign-off and VM isolation, per the roadmap's risk
+> register.
+
+> **Read this before trusting a run:** [`docs/methodology_findings.md`](docs/methodology_findings.md)
+> records six calibration findings measured on real EMBER. Several are *negative* results that
+> change how such an experiment must be built — most importantly, that the choice of which features
+> the attacker may modify, not the retraining policy, silently decides the outcome unless it is set
+> correctly.
 
 ## Install
 
@@ -106,6 +111,30 @@ pip install pytest
 pytest            # unit tests for metrics, policies, environment + an end-to-end smoke run
 ```
 
+## Running the study in stages
+
+The factorial sweep is hours of compute, so it is **checkpointed after every cell** and
+**resumable**: re-running skips any (policy, seed) already recorded, and extends the same CSV.
+Run it in stages and inspect between them rather than as one monolithic job.
+
+```bash
+# Stage A — validate the dynamics on one policy first (~10 min)
+python -m coevomal run --config configs/ember.yaml
+
+# Stage B — seed 0 across all 9 policies (~40 min)
+python experiments/run_multiseed.py --config configs/ember_factorial.yaml     --seeds 1 --out results/ember_multiseed
+
+# Stage C/D — extend to more seeds; completed cells are skipped, not recomputed
+python experiments/run_multiseed.py --config configs/ember_factorial.yaml     --seeds 5 --out results/ember_multiseed
+
+# Publication-ready tables: per-policy mean ± std, per-axis marginal effects,
+# Welch t-test on the headline gap, and the robustness-per-cost frontier
+python experiments/analyze_results.py     --raw results/ember_multiseed/multiseed_raw.csv --out docs/results.md
+```
+
+The sweep echoes attacker / horizon / trigger / replay-cap at startup, because each of those
+silently invalidates a study if wrong (see `docs/methodology_findings.md`).
+
 ## Running on the real EMBER-2018 dataset
 
 The real-data path is **implemented**, not just a stub.
@@ -135,9 +164,14 @@ How it works (`environment/ember_loader.py`):
   multi-seed study is intractable, and every policy sees the identical subsample so the *comparison*
   is unbiased. Tree ensembles are scale-invariant, so standardization only makes the attack
   well-posed, it doesn't change the defender.
-- The attacker may additively mutate only the feature blocks an append/add-style,
-  functionality-preserving mutation can plausibly grow (byte histogram, byte-entropy, strings,
-  sections, imports); header/optional-header/exports/data-directories are structural and immutable.
+- **What the attacker may change is the most consequential setting in the harness.** It may edit
+  every feature a functionality-preserving modification actually affects — the byte and byte-entropy
+  histograms, strings, sections, imports, `general` (file size / vsize / counts), `datadirectories`,
+  `exports`, and the free-form header metadata (timestamp, version and `sizeof_*` fields). Only the
+  40 *structural* header dimensions (target machine, COFF characteristics, subsystem, PE magic) are
+  frozen. Freezing more than that is not conservative — it is what makes the study vacuous: a
+  classifier trained on the frozen remainder alone reaches 0.970 accuracy, so retraining simply
+  learns those features and evasion collapses to zero for every policy alike.
 
 **Limitation (stated for the thesis):** this is the *feature-space* study — the attacker perturbs
 EMBER feature vectors, not raw PE bytes. A raw-binary attacker (gym-malware / MAB-malware around
