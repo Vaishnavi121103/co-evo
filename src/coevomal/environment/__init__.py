@@ -8,7 +8,10 @@ from coevomal.environment.dataset import (
     load_ember,
     make_synthetic,
 )
-from coevomal.environment.malware_env import MalwareEvasionEnv
+from coevomal.environment.malware_env import (
+    MalwareEvasionEnv,
+    build_mimicry_directions,
+)
 
 __all__ = [
     "BENIGN",
@@ -16,6 +19,7 @@ __all__ = [
     "Dataset",
     "FeatureSpace",
     "MalwareEvasionEnv",
+    "build_mimicry_directions",
     "load_ember",
     "make_synthetic",
 ]

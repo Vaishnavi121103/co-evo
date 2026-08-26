@@ -9,7 +9,11 @@ import json
 import numpy as np
 import pytest
 
-from coevomal.environment.ember_loader import ADDITIVE_BLOCKS, load_ember_dataset
+from coevomal.environment.ember_loader import (
+    ADDITIVE_BLOCKS,
+    MONOTONE_UP,
+    load_ember_dataset,
+)
 
 
 def _record(label: int, rng: np.random.Generator) -> dict:
@@ -84,11 +88,17 @@ def test_load_ember_from_fake_jsonl(tmp_path):
     # standardized + finite
     assert np.isfinite(ds.X).all()
     assert np.isfinite(test_mal).all()
-    # feature space: mutable dims are add-only and within the additive blocks
+    # Feature space: mutable dims come from the additive blocks. Only the few
+    # genuine monotone counters are add-only; the normalized histograms and the
+    # signed FeatureHasher outputs must be bidirectional, otherwise the modelled
+    # attack cannot represent what a real append-style mutation does.
     fs = ds.feature_space
     assert fs.n_features == 2381
-    assert fs.additive_only.all()
     assert fs.n_mutable >= 1
+    assert not fs.additive_only.all(), "hashed/normalized features must be bidirectional"
+    assert int(fs.additive_only.sum()) <= len(MONOTONE_UP["strings"]) + len(
+        MONOTONE_UP["section"]
+    )
 
 
 def test_missing_files_raises(tmp_path):
@@ -98,3 +108,50 @@ def test_missing_files_raises(tmp_path):
 
 def test_additive_blocks_are_known_names():
     assert ADDITIVE_BLOCKS == {"histogram", "byteentropy", "strings", "section", "imports"}
+
+
+def test_eval_pool_disjoint_from_train_when_no_test_file(tmp_path):
+    """Without EMBER's test split, the eval pool must exclude training shas.
+
+    Otherwise the attacker would be scored on samples the defender trained
+    on, which would invalidate every evasion number in the study.
+    """
+    rng = np.random.default_rng(3)
+    recs = []
+    for i in range(60):
+        r = _record(1, rng)
+        r["sha256"] = f"mal{i:04d}"   # deterministic, checkable ids
+        recs.append(r)
+        b = _record(0, rng)
+        b["sha256"] = f"ben{i:04d}"
+        recs.append(b)
+    _write_jsonl(tmp_path / "train_features_0.jsonl", recs)
+    # deliberately NO test_features.jsonl
+
+    ds, test_mal = load_ember_dataset(
+        data_dir=tmp_path, n_train=20, n_test_malicious=10,
+        mutable_fraction=0.5, seed=0, cache=False,
+    )
+    assert ds.X.shape[0] == 20
+    assert test_mal.shape[0] == 10
+    # The pool rows must not duplicate any training row.
+    train_rows = {tuple(np.round(r, 5)) for r in ds.X}
+    pool_rows = {tuple(np.round(r, 5)) for r in test_mal}
+    assert train_rows.isdisjoint(pool_rows)
+
+
+def test_truncated_final_line_is_skipped(tmp_path):
+    """A partially-written last line (mid-extraction) must not crash loading."""
+    rng = np.random.default_rng(4)
+    recs = [_record(i % 2, rng) for i in range(40)]
+    path = tmp_path / "train_features_0.jsonl"
+    _write_jsonl(path, recs)
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write('{"sha256": "trunc", "label": 1, "histo')  # truncated
+    _write_jsonl(tmp_path / "test_features.jsonl", [_record(1, rng) for _ in range(10)])
+
+    ds, test_mal = load_ember_dataset(
+        data_dir=tmp_path, n_train=10, n_test_malicious=5, seed=0, cache=False,
+    )
+    assert ds.X.shape[0] == 10
+    assert np.isfinite(ds.X).all()

@@ -65,3 +65,41 @@ def test_env_additive_only_features_never_decrease():
     # Add-only dims should not have gone below their starting value
     # (mutations on them are non-negative; clipping only bounds above).
     assert np.all(x1[add_idx] >= x0[add_idx] - 1e-5)
+
+
+def test_mimicry_directions_move_toward_benign():
+    """Mimicry actions must point from the malicious mean toward the benign one.
+
+    This is what makes the action space meaningful at high dimensionality:
+    random directions in ~10^3 dims are nearly orthogonal to any useful
+    descent direction, so the attack cannot work without semantic actions.
+    """
+    from coevomal.environment import build_mimicry_directions
+
+    ds, _ = make_synthetic(n_features=40, n_train=600, n_test_malicious=10, seed=5)
+    D = build_mimicry_directions(
+        ds.X, ds.y, ds.feature_space, n_actions=10, n_random=2, seed=0
+    )
+    assert D.shape == (10, 40)
+    # unit-norm directions
+    assert np.allclose(np.linalg.norm(D, axis=1), 1.0, atol=1e-5)
+
+    ben = ds.X[ds.y == 0].mean(axis=0)
+    mal = ds.X[ds.y == 1].mean(axis=0)
+    delta = ben - mal
+    # The block-wise mimicry actions (all but the trailing random ones) should
+    # have positive alignment with the benign-minus-malicious direction.
+    aligned = [float(D[i] @ delta) for i in range(D.shape[0] - 2)]
+    assert all(a > 0 for a in aligned), aligned
+
+
+def test_mimicry_respects_additive_only():
+    """Add-only features must never be pushed downward by a mimicry action."""
+    from coevomal.environment import build_mimicry_directions
+
+    ds, _ = make_synthetic(n_features=30, n_train=400, n_test_malicious=5, seed=7)
+    fs = ds.feature_space
+    D = build_mimicry_directions(ds.X, ds.y, fs, n_actions=8, seed=1)
+    add_idx = fs.mutable_idx[fs.additive_only]
+    if add_idx.size:
+        assert (D[:, add_idx] >= -1e-6).all()

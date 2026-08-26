@@ -27,7 +27,12 @@ from sklearn.model_selection import train_test_split
 from coevomal.attackers import make_attacker
 from coevomal.config import ExperimentConfig
 from coevomal.defenders import make_defender
-from coevomal.environment import MalwareEvasionEnv, load_ember, make_synthetic
+from coevomal.environment import (
+    MalwareEvasionEnv,
+    build_mimicry_directions,
+    load_ember,
+    make_synthetic,
+)
 from coevomal.evaluation.metrics import ExperimentResult, RoundLog, oscillation_index
 from coevomal.policies import RetrainingPolicy
 from coevomal.utils import seed_everything
@@ -68,6 +73,17 @@ class CoEvolutionOrchestrator:
         )
         self.feature_space = self.dataset.feature_space
 
+        # Semantic (mimicry) action set, derived once from the clean training
+        # data so every round and every policy shares the same action space.
+        self.directions = (
+            build_mimicry_directions(
+                self.X_train, self.y_train, self.feature_space,
+                n_actions=cfg.env.n_actions, seed=cfg.seed,
+            )
+            if cfg.env.action_space == "mimicry"
+            else None
+        )
+
         # ---- components -----------------------------------------------------
         self.defender = make_defender(cfg.defender)
         self.policy = RetrainingPolicy(cfg.retrain)
@@ -91,6 +107,7 @@ class CoEvolutionOrchestrator:
             reward_evade_bonus=e.reward_evade_bonus,
             reward_step_penalty=e.reward_step_penalty,
             seed=self.cfg.seed,
+            directions=self.directions,
         )
 
     def _clean_accuracy(self) -> float:

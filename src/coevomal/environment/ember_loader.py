@@ -42,8 +42,27 @@ from sklearn.preprocessing import StandardScaler
 from coevomal.environment.dataset import BENIGN, MALICIOUS, Dataset, FeatureSpace
 from coevomal.environment.ember_features import PEFeatureExtractor
 
-# Feature blocks an append/add attacker can plausibly grow.
+# Feature blocks an append/add-style mutation can plausibly touch.
 ADDITIVE_BLOCKS = {"histogram", "byteentropy", "strings", "section", "imports"}
+
+# Within those blocks, only a *few* features are genuine monotone counters that
+# an append-only mutation can solely increase. The rest are either normalized
+# (the byte and byte-entropy histograms sum to 1, so raising one bin lowers
+# others) or produced by ``FeatureHasher``, which emits *signed* values -- so
+# adding an import or a section can move a hashed feature in either direction.
+# Modelling every mutable feature as add-only is therefore unfaithful to the
+# real extractor, and it also makes the attack impossible, since it can only
+# ever push a sample further into malicious territory.
+#
+# Offsets are relative to each block's start (see PEFeatureExtractor layout).
+MONOTONE_UP = {
+    # StringExtractor: [numstrings, avlength, printables, printabledist(96),
+    #                   entropy, paths, urls, registry, MZ]
+    "strings": (0, 2, 100, 101, 102, 103),
+    # SectionInfo general counts: [n_sections, n_zero_size, n_empty_name,
+    #                              n_RX, n_W]  (the rest are hashed/signed)
+    "section": (0, 1, 2, 3, 4),
+}
 
 
 def _block_offsets(extractor: PEFeatureExtractor) -> list[tuple[str, int, int]]:
@@ -72,31 +91,55 @@ def _vectorize_stream(
     n_per_class: int,
     rng: np.random.Generator,
     want_labels=(BENIGN, MALICIOUS),
-) -> tuple[np.ndarray, np.ndarray]:
-    """Stream JSONL, vectorize labelled rows until n_per_class of each is met."""
+    exclude_sha: set[str] | None = None,
+) -> tuple[np.ndarray, np.ndarray, set[str]]:
+    """Stream JSONL, vectorize labelled rows until n_per_class of each is met.
+
+    ``exclude_sha`` lets a second pass skip samples already consumed by an
+    earlier one, which is how we guarantee the evaluation pool is disjoint
+    from the training set. Malformed lines are skipped rather than raising --
+    a partially-extracted file can end in a truncated line, and EMBER's
+    unlabeled rows (label == -1) are filtered out anyway.
+
+    Returns ``(X, y, consumed_sha)``.
+    """
     need = {int(l): n_per_class for l in want_labels}
+    exclude_sha = exclude_sha or set()
     X_rows: list[np.ndarray] = []
     y_rows: list[int] = []
+    consumed: set[str] = set()
     for path in files:
         with path.open("r", encoding="utf-8") as fh:
             for line in fh:
                 if all(v <= 0 for v in need.values()):
                     break
-                obj = json.loads(line)
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue  # truncated / partial line
                 label = int(obj.get("label", -1))
                 if label not in need or need[label] <= 0:
+                    continue
+                sha = obj.get("sha256", "")
+                if sha and sha in exclude_sha:
                     continue
                 vec = extractor.process_raw_features(obj)
                 X_rows.append(vec)
                 y_rows.append(label)
+                if sha:
+                    consumed.add(sha)
                 need[label] -= 1
         if all(v <= 0 for v in need.values()):
             break
+    if not X_rows:
+        raise ValueError(
+            "No usable labelled EMBER records were read. If extraction is "
+            "still in progress, wait for it to finish."
+        )
     X = np.asarray(X_rows, dtype=np.float32)
     y = np.asarray(y_rows, dtype=np.int64)
-    # Shuffle so classes are interleaved.
     perm = rng.permutation(X.shape[0])
-    return X[perm], y[perm]
+    return X[perm], y[perm], consumed
 
 
 def load_ember_dataset(
@@ -129,15 +172,21 @@ def load_ember_dataset(
                 f"No EMBER train_features_*.jsonl found under {data_dir}. "
                 "Extract ember2018.tar.bz2 there first."
             )
-        Xtr, ytr = _vectorize_stream(
+        Xtr, ytr, consumed = _vectorize_stream(
             train_files, extractor, n_per_class=n_train // 2, rng=rng
         )
-        # Held-out malicious pool for evaluation, drawn from the test split
-        # (or a second pass of train if the test file is absent).
-        src = [test_file] if test_file else train_files
-        Xtest_mal, _ = _vectorize_stream(
+        # Held-out malicious pool. Prefer EMBER's own test split (a genuine
+        # hold-out). If it is not present, fall back to the train files but
+        # *exclude* every sha256 already used for training -- otherwise the
+        # attacker would be evaluated on samples the defender trained on,
+        # which would invalidate the evasion numbers.
+        if test_file is not None:
+            src, exclude = [test_file], None
+        else:
+            src, exclude = train_files, consumed
+        Xtest_mal, _, _ = _vectorize_stream(
             src, extractor, n_per_class=n_test_malicious, rng=rng,
-            want_labels=(MALICIOUS,),
+            want_labels=(MALICIOUS,), exclude_sha=exclude,
         )
         Xtest_mal = Xtest_mal[:n_test_malicious]
         if cache:
@@ -157,13 +206,18 @@ def load_ember_dataset(
     n_features = Xtr_s.shape[1]
     offsets = _block_offsets(extractor)
     eligible: list[int] = []
+    monotone: set[int] = set()
     for name, start, end in offsets:
-        if name in ADDITIVE_BLOCKS:
-            eligible.extend(range(start, end))
+        if name not in ADDITIVE_BLOCKS:
+            continue
+        eligible.extend(range(start, end))
+        for off in MONOTONE_UP.get(name, ()):
+            monotone.add(start + off)
     eligible = np.array(sorted(eligible), dtype=np.int64)
     n_mutable = max(1, int(round(mutable_fraction * eligible.size)))
     mutable_idx = np.sort(rng.choice(eligible, size=n_mutable, replace=False))
-    additive_only = np.ones(mutable_idx.size, dtype=bool)  # append semantics
+    # Add-only for true counters; bidirectional for normalized/hashed features.
+    additive_only = np.array([int(i) in monotone for i in mutable_idx], dtype=bool)
 
     lo = np.full(n_features, -8.0, dtype=np.float32)
     hi = np.full(n_features, 8.0, dtype=np.float32)
