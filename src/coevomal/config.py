@@ -43,6 +43,11 @@ class EnvConfig:
     reward_evade_bonus: float = 10.0
     reward_step_penalty: float = 0.02
     reward_mode: str = "logit"       # {"logit", "prob"} -- logit avoids saturation
+    # Used only by the "minimax" cadence: how much the attacker's query budget
+    # grows on each round the defender does not retrain, and the ceiling on
+    # that growth.
+    minimax_escalation: float = 1.35
+    minimax_max_escalation: float = 3.0
 
 
 @dataclass
@@ -89,7 +94,8 @@ class AttackerConfig:
 class RetrainPolicyConfig:
     """The pluggable retraining policy -- the central independent variable."""
 
-    cadence: str = "every_round"     # {"every_round", "every_n", "threshold", "never"}
+    cadence: str = "every_round"     # {"every_round", "every_n", "threshold",
+                                     #  "never", "minimax"}
     every_n: int = 3                 # used when cadence == "every_n"
     trigger_threshold: float = 0.3   # evasion-rate trigger when cadence == "threshold"
     data_selection: str = "full_replay"  # {"full_replay", "hard_mining", "bounded_buffer"}

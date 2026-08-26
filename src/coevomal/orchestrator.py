@@ -101,6 +101,10 @@ class CoEvolutionOrchestrator:
             cfg.attacker, obs_dim=self.feature_space.n_features, n_actions=cfg.env.n_actions
         )
 
+        # Counts the rounds the defender sat out, i.e. the attacker's turns in
+        # the alternating minimax game.
+        self._attacker_turns = 0
+
         self.result = ExperimentResult(config=cfg.to_dict())
 
     # ---- helpers ------------------------------------------------------------
@@ -126,7 +130,7 @@ class CoEvolutionOrchestrator:
             malicious_pool=self.dataset.malicious(),
             feature_space=self.feature_space,
             n_actions=e.n_actions,
-            max_steps=e.max_steps,
+            max_steps=self._attacker_budget(),
             step_scale=e.step_scale,
             evade_threshold=e.evade_threshold,
             reward_evade_bonus=e.reward_evade_bonus,
@@ -136,6 +140,25 @@ class CoEvolutionOrchestrator:
             directions=self.directions,
             benign_pool=self.benign_pool,
         )
+
+    def _attacker_budget(self) -> int:
+        """Query budget for this round, after any minimax escalation.
+
+        Under the ``minimax`` cadence the two sides take alternating turns: the
+        defender retrains on its turn, and on the rounds in between the
+        *attacker* strengthens instead. With a non-learning attacker the
+        faithful analogue of "train the attacker harder" is to give it a larger
+        search budget, so its budget grows by ``minimax_escalation`` on each
+        round the defender sits out, capped at ``minimax_max_escalation``.
+        Every other cadence keeps the configured budget fixed.
+        """
+        e = self.cfg.env
+        if self.cfg.retrain.cadence != "minimax":
+            return e.max_steps
+        factor = min(
+            e.minimax_escalation ** self._attacker_turns, e.minimax_max_escalation
+        )
+        return int(round(e.max_steps * factor))
 
     def _clean_accuracy(self) -> float:
         preds = self.defender.predict(self.X_clean, threshold=self.cfg.env.evade_threshold)
@@ -201,9 +224,15 @@ class CoEvolutionOrchestrator:
                 f"pre_evasive={res.pre_evasive_rate:.3f} "
                 f"queries={res.mean_queries:.1f} "
                 f"retrained={'Y' if retrained else '-'} "
+                f"budget={self._attacker_budget()} "
                 f"clean_acc={log.clean_accuracy:.3f} "
                 f"buffer={log.buffer_size}"
             )
+
+            # Minimax: a round the defender skipped is the attacker's turn, so
+            # its budget escalates for the next one.
+            if self.cfg.retrain.cadence == "minimax" and not retrained:
+                self._attacker_turns += 1
 
             # early stop on convergence
             osc = oscillation_index(self.result.evasion_rates, self.cfg.convergence_window)

@@ -6,7 +6,9 @@ round:
 1. **Cadence** -- *should* we retrain this round?
    ``every_round`` | ``every_n`` | ``threshold`` (retrain only when the
    round's evasion rate exceeds a trigger) | ``never`` (the frozen-classifier
-   lower bound the single-round evasion literature evaluates against).
+   lower bound the single-round evasion literature evaluates against) |
+   ``minimax`` (alternate defender-strengthening and attacker-strengthening
+   turns, as a minimal stand-in for the alternating minimax baseline).
 
 2. **Data selection** -- *on what* do we retrain?
    ``full_replay`` (base data + every evasive sample ever found) |
@@ -103,6 +105,13 @@ class RetrainingPolicy:
         cadence = self.cfg.cadence
         if cadence == "never":
             return False          # frozen-classifier baseline
+        if cadence == "minimax":
+            # Alternating minimax game (Ebrahimi et al. 2022 style): the
+            # defender strengthens on its own turn only, and the attacker
+            # strengthens on the rounds in between. The orchestrator supplies
+            # the attacker half by escalating its query budget on the rounds
+            # this returns False for.
+            return (round_idx % 2) == 0
         if cadence == "every_round":
             return True
         if cadence == "every_n":
@@ -112,7 +121,8 @@ class RetrainingPolicy:
             return evasion_rate >= self.cfg.trigger_threshold
         raise ValueError(
             f"unknown cadence '{cadence}' "
-            "(expected 'every_round', 'every_n', 'threshold' or 'never')"
+            "(expected 'every_round', 'every_n', 'threshold', 'never' "
+            "or 'minimax')"
         )
 
     # ---- data selection -----------------------------------------------------

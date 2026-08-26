@@ -34,6 +34,7 @@ from coevomal.orchestrator import CoEvolutionOrchestrator
 
 CADENCES = ["every_round", "every_n", "threshold"]
 DATA_SELECTION = ["full_replay", "hard_mining", "bounded_buffer"]
+MODES = ["scratch"]
 # Attacker axis. Defaults to whatever the base config specifies -- hardcoding
 # it here would silently override the configured attacker and mislabel every
 # result row. Pass --attackers to sweep the attacker axis explicitly.
@@ -51,6 +52,17 @@ METRICS = [
     "total_retrain_seconds",
     "retrain_count",
 ]
+
+
+def _policy_key(attacker: str, cadence: str, selection: str, mode: str) -> str:
+    """Stable identifier for one factorial cell.
+
+    ``scratch`` is omitted from the key so that keys written before the mode
+    axis existed still match, and a resumed sweep does not silently recompute
+    every completed cell.
+    """
+    key = f"{attacker}__{cadence}__{selection}"
+    return key if mode == "scratch" else f"{key}__{mode}"
 
 
 def _load_existing(raw_path: Path) -> list[dict]:
@@ -79,6 +91,9 @@ def run_multiseed(
     quiet: bool = True,
     seed_start: int = 0,
     attackers: list[str] | None = None,
+    cadences: list[str] | None = None,
+    selections: list[str] | None = None,
+    modes: list[str] | None = None,
 ) -> Path:
     """Run the sweep for seeds ``[seed_start, seeds)``, resuming if possible.
 
@@ -90,15 +105,18 @@ def run_multiseed(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     attackers = attackers or DEFAULT_ATTACKERS or [base.attacker.name]
-    combos = list(itertools.product(attackers, CADENCES, DATA_SELECTION))
+    cadences = cadences or CADENCES
+    selections = selections or DATA_SELECTION
+    modes = modes or MODES
+    combos = list(itertools.product(attackers, cadences, selections, modes))
 
     # Echo the settings that silently invalidate a sweep if they are wrong:
     # the wrong attacker runs the wrong experiment, early stopping leaves
     # policies on unequal horizons, a trigger above peak evasion turns the
     # threshold policy into the frozen baseline, and an unbound replay cap
     # makes the three data-selection strategies collect identical data.
-    print(f"sweep: attackers={attackers} cadences={CADENCES}", flush=True)
-    print(f"       data_selection={DATA_SELECTION}", flush=True)
+    print(f"sweep: attackers={attackers} cadences={cadences}", flush=True)
+    print(f"       data_selection={selections} modes={modes}", flush=True)
     print(
         f"       rounds={base.rounds} early_stop={base.early_stop} "
         f"trigger={base.retrain.trigger_threshold} "
@@ -141,8 +159,8 @@ def run_multiseed(
             w.writerows(raw_rows)
 
     for s in range(seed_start, seeds):
-        for atk, cadence, selection in combos:
-            policy = f"{atk}__{cadence}__{selection}"
+        for atk, cadence, selection, mode in combos:
+            policy = _policy_key(atk, cadence, selection, mode)
             if (policy, s) in done:
                 print(f"[seed {s}] {policy} -- already done, skipping", flush=True)
                 continue
@@ -157,6 +175,7 @@ def run_multiseed(
                     "defender.seed": s,
                     "retrain.cadence": cadence,
                     "retrain.data_selection": selection,
+                    "retrain.mode": mode,
                 }
             )
             print(f"[seed {s}] {atk}/{cadence}/{selection} ...", flush=True)
@@ -166,11 +185,12 @@ def run_multiseed(
             print(f"    done in {time.perf_counter() - t_cell:.0f}s", flush=True)
             summ = orch.result.summary(cfg.convergence_window, cfg.convergence_tol)
             row = {
-                "policy": f"{atk}__{cadence}__{selection}",
+                "policy": policy,
                 "seed": s,
                 "attacker": atk,
                 "cadence": cadence,
                 "data_selection": selection,
+                "mode": mode,
             }
             for m in METRICS:
                 v = summ.get(m)
@@ -186,13 +206,13 @@ def run_multiseed(
 
     # ---- aggregate mean/std per policy -------------------------------------
     summary_rows: list[dict] = []
-    for atk, cadence, selection in combos:
-        policy = f"{atk}__{cadence}__{selection}"
+    for atk, cadence, selection, mode in combos:
+        policy = _policy_key(atk, cadence, selection, mode)
         cells = [r for r in raw_rows if r["policy"] == policy]
         if not cells:
             continue
         agg = {"policy": policy, "attacker": atk, "cadence": cadence,
-               "data_selection": selection, "n_seeds": len(cells)}
+               "data_selection": selection, "mode": mode, "n_seeds": len(cells)}
         for m in METRICS:
             vals = np.array(
                 [r.get(m, float("nan")) for r in cells], dtype=float
@@ -234,13 +254,20 @@ def main() -> None:
     p.add_argument("--out", type=str, default="results/multiseed")
     p.add_argument("--attackers", type=str, default=None,
                    help="comma-separated attacker axis; defaults to the config's")
+    p.add_argument("--cadences", type=str, default=None,
+                   help="comma-separated cadence axis (e.g. never for the frozen baseline)")
+    p.add_argument("--selections", type=str, default=None,
+                   help="comma-separated data-selection axis")
+    p.add_argument("--modes", type=str, default=None,
+                   help="comma-separated retrain-mode axis (scratch,finetune)")
     p.add_argument("--verbose", action="store_true")
     args = p.parse_args()
     base = ExperimentConfig.from_yaml(args.config)
-    atk = args.attackers.split(",") if args.attackers else None
+    split = lambda v: v.split(",") if v else None
     run_multiseed(base, out_dir=Path(args.out), seeds=args.seeds,
                   quiet=not args.verbose, seed_start=args.seed_start,
-                  attackers=atk)
+                  attackers=split(args.attackers), cadences=split(args.cadences),
+                  selections=split(args.selections), modes=split(args.modes))
 
 
 if __name__ == "__main__":

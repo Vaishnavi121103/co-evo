@@ -126,3 +126,63 @@ def test_unknown_cadence_raises_helpfully():
     p = RetrainingPolicy(RetrainPolicyConfig(cadence="weekly"))
     with pytest.raises(ValueError, match="every_round"):
         p.should_retrain(0, 0.5)
+
+
+def test_policy_key_is_backwards_compatible():
+    """`scratch` stays out of the key so completed cells still resume.
+
+    The mode axis was added after the main sweep had already been run; if the
+    key changed shape, every finished cell would silently be recomputed.
+    """
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "experiments"))
+    from run_multiseed import _policy_key
+
+    assert _policy_key("random", "every_round", "full_replay", "scratch") == \
+        "random__every_round__full_replay"
+    assert _policy_key("random", "every_round", "full_replay", "finetune") == \
+        "random__every_round__full_replay__finetune"
+    assert _policy_key("dqn", "never", "full_replay", "scratch") == \
+        "dqn__never__full_replay"
+
+
+def test_minimax_cadence_alternates_turns():
+    """Minimax alternation: the defender retrains on every other round."""
+    from coevomal.config import RetrainPolicyConfig
+    from coevomal.policies import RetrainingPolicy
+
+    p = RetrainingPolicy(RetrainPolicyConfig(cadence="minimax"))
+    assert [p.should_retrain(r, 0.5) for r in range(6)] == \
+        [True, False, True, False, True, False]
+
+
+def test_minimax_escalates_only_on_defender_rest_rounds():
+    """The attacker's budget grows on the rounds the defender sits out.
+
+    Escalation is what makes this an alternating *game* rather than just a
+    slower cadence: each side strengthens on its own turn.
+    """
+    from coevomal.config import ExperimentConfig
+    from coevomal.orchestrator import CoEvolutionOrchestrator
+
+    cfg = ExperimentConfig(name="mmx", rounds=4, early_stop=False)
+    cfg.dataset.n_features, cfg.dataset.n_train = 12, 240
+    cfg.dataset.n_test_malicious, cfg.env.n_actions = 12, 6
+    cfg.env.max_steps, cfg.defender.max_iter = 20, 12
+    cfg.attacker.name = "random"
+    cfg.retrain.cadence = "minimax"
+    o = CoEvolutionOrchestrator(cfg, verbose=False)
+
+    base = o._attacker_budget()
+    assert base == 20
+    o._attacker_turns = 1
+    assert o._attacker_budget() > base
+    o._attacker_turns = 99                       # ceiling applies
+    assert o._attacker_budget() == int(round(20 * cfg.env.minimax_max_escalation))
+
+    cfg.retrain.cadence = "every_round"          # other cadences stay fixed
+    o2 = CoEvolutionOrchestrator(cfg, verbose=False)
+    o2._attacker_turns = 5
+    assert o2._attacker_budget() == 20
