@@ -1,0 +1,43 @@
+# Base config for the factorial sweep. run_factorial.py overrides
+# `attacker.name`, `retrain.cadence`, and `retrain.data_selection` per cell;
+# everything else here is held fixed so the policy variable is isolated.
+name: factorial_base
+rounds: 12
+convergence_window: 4
+convergence_tol: 0.03
+seed: 0
+output_dir: results/factorial
+
+dataset:
+  name: synthetic
+  n_features: 24
+  n_train: 2500
+  n_test_malicious: 200
+  class_separation: 1.4
+  mutable_fraction: 0.6
+  seed: 0
+
+env:
+  n_actions: 10
+  max_steps: 20
+  step_scale: 0.28
+  evade_threshold: 0.5
+
+defender:
+  name: gbdt
+  max_iter: 120
+  learning_rate: 0.08
+
+attacker:
+  name: dqn
+  train_episodes: 200
+  device: auto
+  seed: 0
+
+retrain:
+  cadence: every_round
+  every_n: 3
+  trigger_threshold: 0.3
+  data_selection: full_replay
+  buffer_size: 1500
+  mode: scratch

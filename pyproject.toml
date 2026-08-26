@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coevomal"
+version = "0.1.0"
+description = "Co-evolutionary malware detection: a benchmark harness for comparing defensive retraining policies under RL-driven evasion."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Vaishnavi Suryawanshi" }]
+license = { text = "MIT" }
+dependencies = [
+    "numpy>=1.24",
+    "scikit-learn>=1.3",
+    "torch>=2.0",
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+lightgbm = ["lightgbm>=4.0"]   # optional exact EMBER-model backend
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+coevomal = "coevomal.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

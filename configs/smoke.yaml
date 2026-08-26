@@ -1,0 +1,48 @@
+# Fast smoke config: verifies the whole co-evolution loop end-to-end in
+# well under a minute on CPU. Not for research claims -- tiny everything.
+name: smoke
+rounds: 4
+convergence_window: 3
+convergence_tol: 0.02
+seed: 0
+output_dir: results
+
+dataset:
+  name: synthetic
+  n_features: 16
+  n_train: 800
+  n_test_malicious: 60
+  class_separation: 1.4
+  mutable_fraction: 0.6
+  seed: 0
+
+env:
+  n_actions: 8
+  max_steps: 12
+  step_scale: 0.3
+  evade_threshold: 0.5
+  reward_evade_bonus: 10.0
+  reward_step_penalty: 0.02
+
+defender:
+  name: gbdt
+  max_iter: 60
+  learning_rate: 0.1
+  seed: 0
+
+attacker:
+  name: dqn
+  train_episodes: 40
+  gamma: 0.95
+  lr: 0.001
+  hidden: 64
+  device: cpu
+  seed: 0
+
+retrain:
+  cadence: every_round
+  every_n: 3
+  trigger_threshold: 0.3
+  data_selection: full_replay
+  buffer_size: 1000
+  mode: scratch

@@ -1,0 +1,42 @@
+# Lower-bound baseline: a frozen classifier that never retrains
+# (gym-malware / MERLIN style). With cadence effectively disabled the
+# evasion rate shows what the attacker achieves against a static defender.
+# Implemented as threshold cadence with an unreachable trigger.
+name: baseline_frozen
+rounds: 15
+convergence_window: 4
+convergence_tol: 0.03
+seed: 0
+output_dir: results
+
+dataset:
+  name: synthetic
+  n_features: 32
+  n_train: 4000
+  n_test_malicious: 400
+  class_separation: 1.4
+  mutable_fraction: 0.6
+  seed: 0
+
+env:
+  n_actions: 12
+  max_steps: 30
+  step_scale: 0.25
+  evade_threshold: 0.5
+
+defender:
+  name: gbdt
+  max_iter: 150
+  learning_rate: 0.08
+
+attacker:
+  name: dqn
+  train_episodes: 400
+  device: auto
+  seed: 0
+
+retrain:
+  cadence: threshold
+  trigger_threshold: 2.0   # unreachable => defender never retrains
+  data_selection: full_replay
+  mode: scratch

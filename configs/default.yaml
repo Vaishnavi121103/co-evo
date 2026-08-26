@@ -1,0 +1,54 @@
+# Reference single-experiment config. A reasonable middle ground between the
+# smoke test and a full research run; a handful of minutes on CPU.
+name: default
+rounds: 15
+convergence_window: 4
+convergence_tol: 0.03
+seed: 0
+output_dir: results
+
+dataset:
+  name: synthetic
+  n_features: 32
+  n_train: 4000
+  n_test_malicious: 400
+  class_separation: 1.4
+  mutable_fraction: 0.6
+  seed: 0
+
+env:
+  n_actions: 12
+  max_steps: 30
+  step_scale: 0.25
+  evade_threshold: 0.5
+  reward_evade_bonus: 10.0
+  reward_step_penalty: 0.02
+
+defender:
+  name: gbdt
+  max_iter: 150
+  learning_rate: 0.08
+  seed: 0
+
+attacker:
+  name: dqn
+  train_episodes: 400
+  gamma: 0.95
+  lr: 0.001
+  hidden: 128
+  epsilon_start: 1.0
+  epsilon_end: 0.05
+  epsilon_decay: 0.995
+  buffer_size: 10000
+  batch_size: 64
+  target_sync: 200
+  device: auto
+  seed: 0
+
+retrain:
+  cadence: every_round
+  every_n: 3
+  trigger_threshold: 0.3
+  data_selection: full_replay
+  buffer_size: 2000
+  mode: scratch
