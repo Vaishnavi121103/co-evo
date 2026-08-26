@@ -1,10 +1,17 @@
 # Base config for the factorial retraining-policy sweep on REAL EMBER-2018.
-# run_factorial.py / run_multiseed.py override attacker.name, retrain.cadence,
-# and retrain.data_selection per cell; everything else is held fixed so the
-# policy variable is isolated. Smaller subsample + fewer rounds than a single
-# showcase run because the sweep multiplies cost by (cells x seeds).
+#
+# run_multiseed.py overrides retrain.cadence and retrain.data_selection per
+# cell (and the seeds); everything else here is held fixed so any difference
+# in convergence / oscillation / cost is attributable to the policy variable.
+#
+# Every value below was calibrated against the real data (see docs/results.md):
+#   defender  max_iter=80,lr=0.08 -> 98.4% clean accuracy at ~half the fit cost
+#                                    of max_iter=150 (98.5%)
+#   env       mimicry actions + logit reward: random directions and a
+#             probability-difference reward both fail at EMBER dimensionality
+#   attacker  train_every=4 (standard DQN) + CUDA -> ~33s/round, not ~190s
 name: ember_factorial_base
-rounds: 10
+rounds: 8
 convergence_window: 4
 convergence_tol: 0.03
 seed: 0
@@ -13,28 +20,39 @@ output_dir: results/ember_factorial
 dataset:
   name: ember
   ember_path: data/ember
-  n_train: 12000
-  n_test_malicious: 500
+  n_train: 8000            # balanced subsample (4k benign / 4k malicious)
+  n_test_malicious: 300    # held-out malicious pool, from EMBER's test split
   mutable_fraction: 0.5
   seed: 0
 
 env:
-  n_actions: 14
-  max_steps: 50
-  step_scale: 0.4
+  action_space: mimicry    # block-wise benign-mimicry directions
+  n_actions: 16
+  max_steps: 60            # attacker query budget per sample
+  step_scale: 4.0
   evade_threshold: 0.5
+  reward_mode: logit       # log-odds shaping; "prob" saturates and kills learning
+  reward_evade_bonus: 10.0
+  reward_step_penalty: 0.02
 
 defender:
   name: gbdt
-  max_iter: 150
-  learning_rate: 0.05
+  max_iter: 80
+  learning_rate: 0.08
 
 attacker:
   name: dqn
-  train_episodes: 200
+  train_episodes: 100
+  gamma: 0.95
+  lr: 0.001
   hidden: 128
+  epsilon_start: 1.0
+  epsilon_end: 0.05
+  epsilon_decay: 0.99
   buffer_size: 20000
   batch_size: 128
+  target_sync: 250
+  train_every: 4
   device: auto
   seed: 0
 

@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import csv
 import itertools
+import time
 from pathlib import Path
 
 import numpy as np
@@ -38,6 +39,8 @@ ATTACKERS = ["dqn"]
 # Metrics we aggregate across seeds.
 METRICS = [
     "oscillation_index",
+    "mean_attack_success_tail",
+    "final_attack_success_rate",
     "mean_evasion_tail",
     "final_evasion_rate",
     "max_evasion_rate",
@@ -47,18 +50,64 @@ METRICS = [
 ]
 
 
+def _load_existing(raw_path: Path) -> list[dict]:
+    """Read previously completed rows so a re-run resumes instead of redoing."""
+    if not raw_path.exists():
+        return []
+    rows: list[dict] = []
+    with raw_path.open("r", newline="", encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            for k, v in list(r.items()):
+                if k in ("policy", "attacker", "cadence", "data_selection"):
+                    continue
+                try:
+                    r[k] = float(v)
+                except (TypeError, ValueError):
+                    r[k] = float("nan")
+            r["seed"] = int(r["seed"])
+            rows.append(r)
+    return rows
+
+
 def run_multiseed(
-    base: ExperimentConfig, out_dir: Path, seeds: int = 5, quiet: bool = True
+    base: ExperimentConfig,
+    out_dir: Path,
+    seeds: int = 5,
+    quiet: bool = True,
+    seed_start: int = 0,
 ) -> Path:
+    """Run the sweep for seeds ``[seed_start, seeds)``, resuming if possible.
+
+    Results are checkpointed after every cell, and any (policy, seed) already
+    present in ``multiseed_raw.csv`` is skipped -- so the study can be run in
+    stages and re-invoked to extend it without recomputing finished work.
+    """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     combos = list(itertools.product(ATTACKERS, CADENCES, DATA_SELECTION))
-    raw_rows: list[dict] = []
+    raw_path = out_dir / "multiseed_raw.csv"
+    raw_rows: list[dict] = _load_existing(raw_path)
+    done = {(r["policy"], int(r["seed"])) for r in raw_rows}
+    if done:
+        print(f"resuming: {len(done)} cells already complete in {raw_path}", flush=True)
 
-    for s in range(seeds):
+    def _flush_raw() -> None:
+        """Persist after every seed so a long sweep is never all-or-nothing."""
+        if not raw_rows:
+            return
+        with raw_path.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.DictWriter(fh, fieldnames=list(raw_rows[0].keys()))
+            w.writeheader()
+            w.writerows(raw_rows)
+
+    for s in range(seed_start, seeds):
         for atk, cadence, selection in combos:
-            name = f"{atk}__{cadence}__{selection}__seed{s}"
+            policy = f"{atk}__{cadence}__{selection}"
+            if (policy, s) in done:
+                print(f"[seed {s}] {policy} -- already done, skipping", flush=True)
+                continue
+            name = f"{policy}__seed{s}"
             cfg = base.replace(
                 **{
                     "name": name,
@@ -72,8 +121,10 @@ def run_multiseed(
                 }
             )
             print(f"[seed {s}] {atk}/{cadence}/{selection} ...", flush=True)
+            t_cell = time.perf_counter()
             orch = CoEvolutionOrchestrator(cfg, verbose=not quiet)
             orch.run()
+            print(f"    done in {time.perf_counter() - t_cell:.0f}s", flush=True)
             summ = orch.result.summary(cfg.convergence_window, cfg.convergence_tol)
             row = {
                 "policy": f"{atk}__{cadence}__{selection}",
@@ -87,13 +138,11 @@ def run_multiseed(
                 # rounds_to_convergence is None on divergence -> NaN for stats.
                 row[m] = float("nan") if v is None else float(v)
             raw_rows.append(row)
+            _flush_raw()   # checkpoint after every cell
+        _flush_raw()
+        print(f"[seed {s}] complete -> {raw_path} ({len(raw_rows)} rows)", flush=True)
 
-    # ---- raw ---------------------------------------------------------------
-    raw_path = out_dir / "multiseed_raw.csv"
-    with raw_path.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(raw_rows[0].keys()))
-        w.writeheader()
-        w.writerows(raw_rows)
+    _flush_raw()
     print(f"wrote {raw_path}")
 
     # ---- aggregate mean/std per policy -------------------------------------
@@ -133,12 +182,14 @@ def run_multiseed(
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--config", type=str, default="configs/ember_factorial.yaml")
-    p.add_argument("--seeds", type=int, default=5)
+    p.add_argument("--seeds", type=int, default=5, help="run seeds [seed-start, seeds)")
+    p.add_argument("--seed-start", type=int, default=0)
     p.add_argument("--out", type=str, default="results/multiseed")
     p.add_argument("--verbose", action="store_true")
     args = p.parse_args()
     base = ExperimentConfig.from_yaml(args.config)
-    run_multiseed(base, out_dir=Path(args.out), seeds=args.seeds, quiet=not args.verbose)
+    run_multiseed(base, out_dir=Path(args.out), seeds=args.seeds,
+                  quiet=not args.verbose, seed_start=args.seed_start)
 
 
 if __name__ == "__main__":
