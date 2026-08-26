@@ -201,14 +201,19 @@ def fig_capacity(formats: list[str]) -> None:
         ax.errorbar(caps, m, yerr=s, marker="o", ms=4, lw=1.3, capsize=2,
                     color=col, label=SEL_LABEL[sel], zorder=3)
     ax.axhline(fr.mean(), ls="--", lw=1.0, color=C_FULL, zorder=2)
-    ax.fill_between([150, 900], fr.mean() - fr.std(ddof=1),
-                    fr.mean() + fr.std(ddof=1), color=C_FULL, alpha=.12, zorder=1)
-    ax.text(860, fr.mean() + .022, "unbounded retention\n(full replay)",
-            ha="right", fontsize=6.8, color=C_FULL)
+    ax.fill_between([150, 950], fr.mean() - fr.std(ddof=1),
+                    fr.mean() + fr.std(ddof=1), color=C_FULL, alpha=.14, zorder=1)
+    # Label the reference line on the left, clear of both the markers at
+    # cap 800 and the legend at top right.
+    ax.text(163, fr.mean() + .028, "unbounded retention (full replay)",
+            ha="left", va="bottom", fontsize=6.8, color=C_FULL)
     ax.set_xscale("log")
     ax.set_xticks(caps)
     ax.set_xticklabels([str(c) for c in caps])
-    ax.set_xlim(150, 900)
+    ax.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+    ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+    ax.set_xlim(155, 950)
+    ax.set_ylim(0, 0.47)
     ax.set_xlabel("adversarial replay capacity (samples retained)")
     ax.set_ylabel("settled evasion rate")
     ax.legend(loc="upper right", handlelength=1.8)

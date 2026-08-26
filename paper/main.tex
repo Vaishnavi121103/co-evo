@@ -52,10 +52,12 @@ against a frozen-classifier lower bound and a minimax-alternation baseline.
 A two-way ANOVA attributes essentially all explained variance to what the
 defender retrains \emph{on} ($\omega^2=0.947$, $p<10^{-24}$) and none to how
 \emph{often} it retrains ($p=0.47$), with no interaction; the result survives a
-rank-based robustness check. Decomposing the retention factor further shows the
-effect is driven by replay \emph{capacity} rather than by the eviction rule,
-and---counter-intuitively---that mining the hardest evasions is worse than
-plain FIFO eviction at equal capacity. Minimax alternation is dominated by
+rank-based robustness check. Decomposing the retention factor further isolates
+the mechanism as a \emph{capacity threshold}: raising the replay cap from $200$
+to $800$ samples closes the entire gap to unbounded replay and simultaneously
+erases any difference between eviction rules, while below the threshold the
+intuitive heuristic---mining the hardest evasions---is the \emph{worst}
+available choice, losing to plain FIFO. Minimax alternation is dominated by
 simply retraining every round. We release the harness, the calibration
 findings that constrain how such an experiment must be built, and all run
 artifacts.
@@ -106,10 +108,10 @@ adversarial retention ($9$ policies $\times\,5$ seeds), bounded below by a
 frozen classifier and compared against a minimax-alternation baseline
 (Section~\ref{sec:results}).
 \item The finding that retention dominates cadence to the point where cadence
-is statistically undetectable, and the follow-up experiment showing the
-retention effect is a \emph{capacity} effect rather than a selection-rule
-effect---with hardest-example mining performing \emph{worse} than FIFO at
-matched capacity (Section~\ref{sec:capacity}).
+is statistically undetectable, and a follow-up experiment identifying the
+mechanism as a \emph{capacity threshold} rather than a selection-rule effect:
+above it the eviction rule is irrelevant, below it hardest-example mining is
+the worst available option (Section~\ref{sec:capacity}).
 \item A set of negative calibration results that constrain how such an
 experiment must be built at all, most importantly that the choice of which
 features the attacker may modify silently determines the outcome
@@ -367,18 +369,47 @@ eviction rule. Fig.~\ref{fig:capacity} separates them by sweeping the cap.
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{fig4_capacity}
-\caption{Capacity gradient. Raising the replay cap recovers almost all of the
-unbounded performance, and the gap between eviction rules narrows with it,
-indicating a capacity effect rather than a selection-rule effect.}
+\caption{Capacity gradient. Raising the replay cap from $200$ to $800$ closes
+the entire gap to unbounded replay (dashed line, shaded $\pm1$\,std) and
+simultaneously erases the difference between eviction rules. The effect is a
+capacity threshold, not a selection-rule effect.}
 \label{fig:capacity}
 \end{figure}
 
-At the binding cap of $200$ the eviction rule does matter, and in the direction
-opposite to intuition: FIFO ($0.311$) outperforms hardest-example mining
-($0.376$), and mining is also the most oscillatory policy ($\osc=0.056$ at the
-cheaper cadence). Selecting for the deepest evasions concentrates the buffer on
-a narrow region and discards the diversity the defender needs in order to
-generalise.
+The result is unambiguous (Table~\ref{tab:capacity}). Raising the cap from
+$200$ to $800$ moves FIFO from $0.311$ to $0.0425$ and mining from $0.376$ to
+$0.0428$---both statistically indistinguishable from unbounded replay
+($0.0421\pm0.0027$) and from each other. The apparent superiority of full
+replay is therefore \emph{capacity}: it is the only configuration whose cap
+never binds. Once enough adversarial samples are retained, which ones are
+discarded stops mattering entirely.
+
+\begin{table}[t]
+\caption{Capacity gradient, mean $\pm$ std over $5$ seeds, every-round cadence.}
+\label{tab:capacity}
+\centering
+\small
+\begin{tabular}{lrr}
+\toprule
+Replay capacity & FIFO buffer & Hardest-example mining \\
+\midrule
+$200$        & $0.3110\pm0.0242$ & $0.3761\pm0.0577$ \\
+$800$        & $0.0425\pm0.0021$ & $0.0428\pm0.0034$ \\
+unbounded    & \multicolumn{2}{c}{$0.0421\pm0.0027$ (full replay)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Below the threshold, however, the eviction rule does matter---and in the
+direction opposite to intuition. At the binding cap of $200$, plain FIFO
+($0.311$) outperforms hardest-example mining ($0.376$), and mining is also the
+most oscillatory policy in the entire study ($\osc=0.056$ at the cheaper
+cadence). Selecting for the deepest evasions concentrates the buffer on a
+narrow region of the input space and discards the diversity the defender needs
+in order to generalise. The practical rule that follows is therefore
+two-sided: retain enough adversarial samples and the eviction policy is
+irrelevant; retain too few and the intuitively appealing heuristic is the worst
+available choice.
 
 \subsection{Cost, and the minimax baseline}
 
@@ -407,10 +438,19 @@ cheaper. Hollow markers are the frozen and minimax baselines.}
 The practical reading is blunt. A vendor deciding how to spend an adversarial
 retraining budget should spend it on \emph{retaining adversarial samples}, not
 on retraining more frequently: within this design, tripling retraining
-frequency is statistically indistinguishable from not doing so, while
-increasing the adversarial replay capacity moves settled evasion by a factor of
-six. The intuitive optimisation---keep only the hardest examples, since they
-are the most informative---is actively harmful at fixed capacity.
+frequency is statistically indistinguishable from not doing so, while raising
+the replay capacity from $200$ to $800$ samples moves settled evasion from
+$0.31$ to $0.04$.
+
+The capacity result also simplifies the design problem rather than complicating
+it. Because performance saturates---$800$ retained samples already matches
+unbounded replay---the practical question is not \emph{which} adversarial
+samples to keep but simply \emph{whether the buffer is above threshold}. Above
+it, eviction policy is a free choice; below it, the intuitive
+optimisation---keep only the hardest examples, since they are the most
+informative---is actively harmful. We would expect the threshold itself to
+scale with the diversity of the attack rather than being a universal constant,
+and locating it for a given deployment is a cheap, one-dimensional sweep.
 
 Two methodological points generalise beyond this dataset. First, a
 co-evolution benchmark is only measuring the defence if the attacker's
