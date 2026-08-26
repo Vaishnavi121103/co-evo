@@ -135,6 +135,29 @@ python experiments/analyze_results.py     --raw results/ember_multiseed/multisee
 The sweep echoes attacker / horizon / trigger / replay-cap at startup, because each of those
 silently invalidates a study if wrong (see `docs/methodology_findings.md`).
 
+## Results dashboard (local, read-only)
+
+A self-contained viewer for a finished study, built for presenting from. It reads **only** committed
+run artifacts and runs nothing.
+
+```bash
+python experiments/build_dashboard.py            # -> results/dashboard/index.html
+python experiments/build_dashboard.py --serve    # build, then serve on 127.0.0.1:8000
+```
+
+The output is a single ~43 KB `index.html` with the data inlined — no server, no CDN, no network
+calls (a `file://` page cannot `fetch` a sibling CSV, and inlining also makes it portable enough to
+copy onto a presentation machine). Open it directly or serve the folder with any static server.
+
+Seven sections: headline figures, per-round co-evolution dynamics, the nine-policy comparison with a
+metric toggle and a full table, the per-axis marginal effects, the robustness-vs-cost frontier, the
+secondary findings, and the method/limits. Use the numbered rail or **↑/↓** to move between sections;
+hover any mark for exact values. It has light/dark themes, a theme toggle, and a print stylesheet
+that drops the rail for handouts.
+
+Rebuild it after extending a sweep and it picks up the new seeds. Only **fully complete** seeds are
+included, so it never reports a mean over an uneven number of runs while a sweep is still running.
+
 ## Running on the real EMBER-2018 dataset
 
 The real-data path is **implemented**, not just a stub.

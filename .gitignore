@@ -32,3 +32,6 @@ Thumbs.db
 
 # EMBER dataset (multi-GB, downloadable) - never commit
 data/ember/
+
+# Built dashboard (regenerate with experiments/build_dashboard.py)
+results/dashboard/
