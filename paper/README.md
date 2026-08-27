@@ -38,10 +38,22 @@ python paper/make_docx.py                  # two-column, IEEE page setup
 python paper/make_docx.py --single-column  # easier to comment on
 ```
 
-Uses pandoc (installed via `pip install pypandoc_binary`). The script rewrites
-the figure paths to the PNG twins, since Word cannot render the vector PDFs the
-LaTeX build uses, expands the two custom metric macros pandoc would otherwise
-drop silently, and sets US Letter with IEEE margins and two columns.
+Uses pandoc (`pip install pypandoc_binary`) with the official IEEE
+`conference-template-a4.docx` as the reference document, so A4 geometry, fonts
+and the IEEE paragraph styles come from IEEE rather than from us. The script
+then handles what pandoc cannot:
+
+- **Remaps style names.** Pandoc emits its own identifiers (`Title`,
+  `ImageCaption`, ...) which are not the ones the template defines
+  (`papertitle`, `figurecaption`, ...). Unmapped styles fall back to Normal and
+  the document silently looks nothing like the template.
+- **Rebuilds the sectioning.** Pandoc copies one section layout from the
+  reference document and picks the template's final single-column one. IEEE
+  layout is a single-column title and abstract followed by a two-column body,
+  which is two sections separated by a continuous break.
+- **Rewrites figure paths** to the PNG twins, since Word cannot render the
+  vector PDFs the LaTeX build uses, and **expands the custom metric macros**
+  pandoc would otherwise drop silently.
 
 **The `.tex` is the source of record.** Regenerate the `.docx` after any edit
 rather than editing it directly, or the two will drift apart.
