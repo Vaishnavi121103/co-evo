@@ -35,3 +35,6 @@ data/ember/
 
 # Built dashboard (regenerate with experiments/build_dashboard.py)
 results/dashboard/
+
+# Generated Word output (rebuild with paper/make_docx.py)
+paper/main.docx
