@@ -58,6 +58,33 @@ then handles what pandoc cannot:
 **The `.tex` is the source of record.** Regenerate the `.docx` after any edit
 rather than editing it directly, or the two will drift apart.
 
+### JavaScript route
+
+```bash
+cd paper && npm install          # docx + jszip, first time only
+node paper/make_docx.js          # -> main-js.docx
+node paper/make_docx.js --single-column
+```
+
+A LaTeX to OOXML converter written directly against the document model, with
+no pandoc dependency. It lifts `styles.xml` out of the IEEE template and passes
+it as `externalStyles`, so paragraphs reference IEEE's own style ids and
+inherit their real formatting; floats are numbered in source order so `ef`
+resolves to `Fig. 4` / `Table II` the way LaTeX would.
+
+**Choose the Python route if the equations matter.** Pandoc emits native Word
+equation objects (OMML) that stay editable in Word; the JavaScript route
+renders maths as Unicode text. For this paper the maths is superscripts,
+subscripts, Greek letters and inequalities, all of which Unicode represents
+faithfully, but the distinction matters if anyone needs to edit a formula.
+
+| | Python (pandoc) | JavaScript |
+|---|---|---|
+| IEEE template styles | yes | yes |
+| Equations | native, editable | Unicode text |
+| Dependency | pandoc binary (~180 MB) | two npm packages |
+| Output | `main.docx` | `main-js.docx` |
+
 ## Compiling
 
 `pdflatex` is not installed in this environment, so the repository ships

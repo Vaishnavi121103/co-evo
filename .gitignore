@@ -39,3 +39,6 @@ results/dashboard/
 # Generated Word output (rebuild with paper/make_docx.py)
 paper/main.docx
 paper/conference-template-a4.docx
+paper/node_modules/
+paper/main-js.docx
+paper/package-lock.json
