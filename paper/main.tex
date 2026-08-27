@@ -43,24 +43,27 @@ adversarial examples it failed to catch. That framing is now well established;
 what is not established is \emph{which retraining policy to adopt}. Existing
 studies each propose and evaluate a single defensive mechanism on its own
 dataset against its own attacker, so their results cannot be compared, and the
-policy design space---how often to retrain, and on which data---has never been
-varied systematically. We contribute a controlled factorial study of that space.
-Using a shared harness in which attacker, defender, and metrics are held fixed,
-we cross retraining cadence with adversarial-data retention over
-$3\times3$ policies $\times5$ seeds ($45$ runs) on the real EMBER-2018 corpus,
-against a frozen-classifier lower bound and a minimax-alternation baseline.
-A two-way ANOVA attributes essentially all explained variance to what the
-defender retrains \emph{on} ($\omega^2=0.947$, $p<10^{-24}$) and none to how
-\emph{often} it retrains ($p=0.47$), with no interaction; the result survives a
-rank-based robustness check. Decomposing the retention factor further isolates
-the mechanism as a \emph{capacity threshold}: raising the replay cap from $200$
-to $800$ samples closes the entire gap to unbounded replay and simultaneously
-erases any difference between eviction rules, while below the threshold the
-intuitive heuristic---mining the hardest evasions---is the \emph{worst}
-available choice, losing to plain FIFO. Minimax alternation is dominated by
-simply retraining every round. We release the harness, the calibration
-findings that constrain how such an experiment must be built, and all run
-artifacts.
+policy design space---how often to retrain, on which data, and by what
+fitting procedure---has never been varied systematically. We contribute a
+controlled factorial study of that space. Using a shared harness in which
+attacker, defender, and metrics are held fixed, we cross retraining cadence,
+adversarial-data retention, and retraining mode over a balanced
+$3	imes3	imes2$ design $	imes5$ seeds ($90$ runs) on the real EMBER-2018
+corpus, against a frozen-classifier lower bound and a minimax-alternation
+baseline. ANOVA orders the three factors unambiguously and counter to common
+practice: how the model is refit dominates ($\omega^2=0.566$), what it is
+refit on matters far less ($\omega^2=0.076$), and how \emph{often} it is
+refit is statistically undetectable ($p=0.65$). Warm-starting the detector is
+both worse and more expensive than refitting from scratch at equal incremental
+budget, and even its best configuration sits closer to never retraining than to
+the best refit policy. Within the retention factor the mechanism is a
+\emph{capacity threshold}: raising the replay cap from $200$ to $800$ samples
+closes the entire gap to unbounded replay and erases any difference between
+eviction rules, while below the threshold the intuitive heuristic---mining the
+hardest evasions---is the worst available choice, losing to plain FIFO. Minimax
+alternation is dominated by simply retraining every round. We release the
+harness, the calibration findings that constrain how such an experiment must be
+built, and all run artifacts.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -410,6 +413,66 @@ in order to generalise. The practical rule that follows is therefore
 two-sided: retain enough adversarial samples and the eviction policy is
 irrelevant; retain too few and the intuitively appealing heuristic is the worst
 available choice.
+
+\subsection{Retraining mode dominates when it is added as a third factor}
+\label{sec:mode}
+
+Extending the design with the retraining \emph{mode}---refit from scratch
+versus warm-start (fine-tune) the existing ensemble---gives a balanced
+$3\times3\times2$ factorial over $90$ runs. Mode turns out to matter more than
+either original factor (Table~\ref{tab:anova3}, Fig.~\ref{fig:mode}).
+Fine-tuning settles at $\evrate=0.694$ against $0.245$ for refitting, oscillates
+twice as much ($0.051$ vs $0.026$), and costs \emph{more}
+($120.0$\,s vs $95.9$\,s) because each round refits a larger ensemble. Even the
+best fine-tuned cell ($0.503$) is closer to the frozen bound ($0.829$) than to
+the best refit-from-scratch policy ($0.042$). Kruskal--Wallis agrees
+($H=45.25$, $p=1.7\times10^{-11}$).
+
+\begin{table}[t]
+\caption{Three-way ANOVA on settled evasion. Balanced $3\times3\times2$, $n=5$
+($90$ runs). Main effects shown; residual df $=72$.}
+\label{tab:anova3}
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+Source & SS & df & $F$ & $p$ & $\omega^2$ \
+\midrule
+Retraining mode & $4.5381$ & $1$ & $153.01$ & $1.7\times10^{-19}$ & $0.566$ \
+Retention       & $0.6671$ & $2$ & $11.25$  & $5.6\times10^{-5}$  & $0.076$ \
+Cadence         & $0.0261$ & $2$ & $0.44$   & $0.645$             & $-0.004$ \
+Residual        & $2.1355$ & $72$ &         &                     &          \
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig6_mode}
+\caption{Refitting from scratch (solid) versus fine-tuning (hatched) at each
+retention level. Fine-tuning is worse everywhere, and its variance across seeds
+is far larger.}
+\label{fig:mode}
+\end{figure}
+
+\textbf{Mechanism, and an important qualification.} A diagnostic on real
+evasive samples isolates the cause. After one adversarial round, refitting from
+scratch catches $100\%$ of the $481$ evasive samples; warm-starting with the
+same \emph{incremental} budget of $80$ trees catches only $84.4\%$. The frozen
+prefix of the ensemble still encodes the boundary the attacker has already
+defeated, and $80$ shrunk trees cannot overturn it. This is not a shrinkage
+artifact: the learning rate is inherited unchanged, and raising it to $0.3$
+makes matters worse ($74.4\%$ caught, clean accuracy falling to $0.863$).
+
+The qualification is that this comparison is matched on \emph{incremental}
+budget---the natural cost-matched reading, and the one under which fine-tuning
+is also the more expensive option---but not on \emph{total} capacity. Granting
+the warm-started model $400$ incremental trees instead of $80$ restores
+$100\%$ adversarial recall. The defensible claim is therefore the narrower one:
+\emph{at equal incremental retraining budget, warm-starting is both worse and
+more expensive than refitting}, and its deficit is a capacity effect rather
+than a property of warm-starting in principle. We report the mode effect with
+that scope attached rather than as a blanket result.
 
 \subsection{Cost, and the minimax baseline}
 
