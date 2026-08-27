@@ -53,6 +53,7 @@ class GBDTDefender(Defender):
         self.max_total_iter = int(max_total_iter)
         self.seed = int(seed)
         self._model: HistGradientBoostingClassifier | None = None
+        self._trees_last_fit = 0
 
     def _new_model(self, warm_start: bool = False) -> HistGradientBoostingClassifier:
         return HistGradientBoostingClassifier(
@@ -60,6 +61,18 @@ class GBDTDefender(Defender):
             learning_rate=self.learning_rate,
             max_depth=self.max_depth,
             warm_start=warm_start,
+            # Pinned off. The scikit-learn default ("auto") switches early
+            # stopping ON above 10,000 training samples, which here is
+            # *policy-dependent* rather than incidental: the training set is
+            # the clean data plus every retained adversarial sample, so a
+            # policy that retains more -- or that fails and therefore generates
+            # more evasions -- crosses the threshold while a capped or
+            # successful policy never does. Past it the model fits far fewer
+            # trees (as few as 15 of a requested 80) and holds out 10% of the
+            # data, so policies would be compared under different training
+            # regimes, with the change biting hardest exactly where a policy is
+            # already doing badly.
+            early_stopping=False,
             random_state=self.seed,
         )
 
@@ -72,8 +85,10 @@ class GBDTDefender(Defender):
                 self._model.max_iter + self.finetune_iter, self.max_total_iter
             )
             if target > self._model.max_iter:
+                before = self._model.n_iter_
                 self._model.set_params(warm_start=True, max_iter=target)
                 self._model.fit(X, y)
+                self._trees_last_fit = self._model.n_iter_ - before
             else:
                 # Ceiling reached. Refitting from scratch here would silently
                 # convert a fine-tune round into a scratch round, so this path
@@ -88,6 +103,7 @@ class GBDTDefender(Defender):
         else:
             self._model = self._new_model(warm_start=False)
             self._model.fit(X, y)
+            self._trees_last_fit = self._model.n_iter_
         return self
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
@@ -110,6 +126,10 @@ class GBDTDefender(Defender):
         )
         clone._model = copy.deepcopy(self._model)
         return clone
+
+    @property
+    def trees_last_fit(self) -> int:
+        return self._trees_last_fit
 
     @property
     def is_fitted(self) -> bool:

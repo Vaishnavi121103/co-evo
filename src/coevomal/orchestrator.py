@@ -196,6 +196,7 @@ class CoEvolutionOrchestrator:
             # 5. retrain defender per policy
             retrain_seconds = 0.0
             train_samples = 0
+            trees_fitted = 0
             retrained = self.policy.should_retrain(rnd, res.evasion_rate)
             if retrained:
                 X, y = self.policy.build_training_set(self.X_train, self.y_train)
@@ -203,6 +204,7 @@ class CoEvolutionOrchestrator:
                 t0 = time.perf_counter()
                 self.defender.fit(X, y, warm_start=self.policy.warm_start)
                 retrain_seconds = time.perf_counter() - t0
+                trees_fitted = self.defender.trees_last_fit
 
             # 6. log
             log = RoundLog(
@@ -213,6 +215,7 @@ class CoEvolutionOrchestrator:
                 mean_queries=res.mean_queries,
                 retrained=retrained,
                 retrain_seconds=retrain_seconds,
+                trees_fitted=trees_fitted,
                 train_samples=train_samples,
                 clean_accuracy=self._clean_accuracy(),
                 buffer_size=len(self.policy.buffer),

@@ -18,7 +18,11 @@ Per-round we log:
 * ``mean_queries``   -- attacker query complexity: mean defender queries per
   sample; rising values mean evasion is getting *harder*.
 * ``retrained``      -- whether the defender retrained this round.
-* ``retrain_seconds``/``train_samples`` -- retraining cost.
+* ``trees_fitted``   -- base learners actually fitted this round. This is the
+  *deterministic* cost unit: wall-clock is not comparable across runs that
+  shared the machine, so cost claims are stated in trees and retrains and
+  ``retrain_seconds`` is reported as indicative only.
+* ``retrain_seconds``/``train_samples`` -- wall-clock cost and training-set size.
 * ``clean_accuracy`` -- defender accuracy on held-out clean data, to catch
   robustness bought at the price of clean performance.
 
@@ -52,6 +56,7 @@ class RoundLog:
     mean_queries: float
     retrained: bool
     retrain_seconds: float
+    trees_fitted: int
     train_samples: int
     clean_accuracy: float
     buffer_size: int
@@ -121,6 +126,7 @@ class ExperimentResult:
             "final_evasion_rate": rates[-1] if rates else float("nan"),
             "max_evasion_rate": max(rates) if rates else float("nan"),
             "total_retrain_seconds": retrain_secs,
+            "total_trees_fitted": sum(r.trees_fitted for r in self.rounds),
             "retrain_count": retrain_count,
             # Robustness bought per second of retraining. A no-retrain
             # baseline has zero cost, so the ratio is undefined rather than

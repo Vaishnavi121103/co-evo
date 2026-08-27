@@ -36,3 +36,14 @@ class Defender(ABC):
     @abstractmethod
     def is_fitted(self) -> bool:
         ...
+
+    @property
+    def trees_last_fit(self) -> int:
+        """Base learners fitted by the most recent ``fit`` call.
+
+        A deterministic stand-in for retraining cost. Wall-clock is not
+        comparable across runs that shared the machine with other jobs, so
+        cost claims are stated in this unit and wall-clock is reported as
+        indicative only.
+        """
+        return 0

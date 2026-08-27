@@ -105,7 +105,7 @@ def test_robustness_per_cost_is_nan_without_retraining():
     r = ExperimentResult(config={})
     r.rounds.append(RoundLog(round=0, evasion_rate=0.5, attack_success_rate=0.5,
                              pre_evasive_rate=0.0, mean_queries=1.0, retrained=False,
-                             retrain_seconds=0.0, train_samples=0,
+                             retrain_seconds=0.0, trees_fitted=0, train_samples=0,
                              clean_accuracy=0.9, buffer_size=0))
     assert np.isnan(r.summary()["robustness_per_cost"])
 
@@ -225,3 +225,23 @@ def test_finetune_iter_is_independent_of_initial_size():
     cap.fit(X, y, warm_start=True)
     assert cost._model.n_iter_ == 40                            # +20 cost-matched
     assert cap._model.n_iter_ == 100                            # +80 capacity-matched
+
+
+def test_defender_early_stopping_is_pinned_off():
+    """Training-set size must not silently change the fitting regime.
+
+    scikit-learn enables early stopping above 10,000 samples by default. The
+    training set here is clean data plus retained adversarial samples, so that
+    threshold is policy-dependent: an unbounded-replay policy crosses it while
+    a capped one never does, and the model would then fit far fewer trees.
+    """
+    from coevomal.defenders import GBDTDefender
+
+    rng = np.random.default_rng(0)
+    n = 12000                                   # comfortably past the threshold
+    X = rng.standard_normal((n, 6)).astype(np.float32)
+    y = (rng.random(n) < 0.5).astype(int)
+    d = GBDTDefender(max_iter=40, seed=0).fit(X, y)
+    assert d._model.do_early_stopping_ is False
+    assert d._model.n_iter_ == 40               # full budget, not a truncated fit
+    assert d.trees_last_fit == 40

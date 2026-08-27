@@ -50,6 +50,7 @@ METRICS = [
     "max_evasion_rate",
     "rounds_to_convergence",
     "total_retrain_seconds",
+    "total_trees_fitted",
     "retrain_count",
 ]
 
