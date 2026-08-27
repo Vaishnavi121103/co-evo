@@ -14,6 +14,8 @@ def make_defender(cfg: DefenderConfig) -> Defender:
             max_iter=cfg.max_iter,
             learning_rate=cfg.learning_rate,
             max_depth=cfg.max_depth,
+            finetune_iter=cfg.finetune_iter,
+            max_total_iter=cfg.max_total_iter,
             seed=cfg.seed,
         )
     if cfg.name == "mlp":

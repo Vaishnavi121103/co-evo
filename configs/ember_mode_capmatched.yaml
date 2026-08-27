@@ -1,0 +1,86 @@
+# Base config for the factorial retraining-policy sweep on REAL EMBER-2018.
+#
+# run_multiseed.py overrides retrain.cadence and retrain.data_selection per
+# cell (and the seeds); everything else here is held fixed so any difference
+# in convergence / oscillation / cost is attributable to the policy variable.
+#
+# Every value below was calibrated against the real data (see docs/results.md):
+#   defender  max_iter=80,lr=0.08 -> 98.4% clean accuracy at ~half the fit cost
+#                                    of max_iter=150 (98.5%)
+#   env       mimicry actions + logit reward: random directions and a
+#             probability-difference reward both fail at EMBER dimensionality
+#   attacker  train_every=4 (standard DQN) + CUDA -> ~33s/round, not ~190s
+name: ember_mode_capmatched
+rounds: 8
+convergence_window: 4
+convergence_tol: 0.03
+early_stop: false        # equal horizon for every policy
+seed: 0
+output_dir: results/ember_factorial
+
+dataset:
+  name: ember
+  ember_path: data/ember
+  n_train: 8000            # balanced subsample (4k benign / 4k malicious)
+  n_test_malicious: 600    # held-out malicious pool, from EMBER's test split
+  mutable_fraction: 1.0   # attacker controls every realistically-editable feature
+  seed: 0
+
+env:
+  action_space: exemplar   # per-episode mimicry of a random benign file
+  n_actions: 16
+  max_steps: 60            # attacker query budget per sample
+  step_scale: 4.0
+  evade_threshold: 0.5
+  reward_mode: logit       # log-odds shaping; "prob" saturates and kills learning
+  reward_evade_bonus: 10.0
+  reward_step_penalty: 0.02
+
+defender:
+  name: gbdt
+  max_iter: 80
+  learning_rate: 0.08
+  # CAPACITY-MATCHED fine-tune: 400 trees per round, the increment the
+  # single-round audit showed restores full adversarial recall (84.4% -> 100%).
+  # `max_iter` stays 80 so the INITIAL model is identical to every other arm.
+  # Ceiling exceeds 8*400 + 80 = 3280.
+  finetune_iter: 400
+  max_total_iter: 4000
+
+attacker:
+  # Stochastic mimicry over per-episode benign exemplars. Chosen because it
+  # applies far stronger and more stable pressure than the RL agents at any
+  # feasible budget (round-0 attack success 0.197 vs DQN 0.018); DQN and PPO
+  # stay implemented and are compared in docs/methodology_findings.md, and
+  # can be swept with --attackers.
+  name: random
+  train_episodes: 100
+  gamma: 0.95
+  lr: 0.001
+  hidden: 128
+  epsilon_start: 1.0
+  epsilon_end: 0.05
+  epsilon_decay: 0.99
+  buffer_size: 20000
+  batch_size: 128
+  target_sync: 250
+  train_every: 4
+  device: auto
+  seed: 0
+
+retrain:
+  cadence: every_round
+  every_n: 3
+  # Must sit BELOW the observed peak evasion (~0.27) or the threshold policy
+  # never fires and silently degenerates into the frozen baseline. At 0.10 it
+  # fires in round 0, releases once evasion is suppressed, and re-fires if
+  # evasion creeps back -- which is exactly the retrain/relax cycle the
+  # oscillation index is meant to detect.
+  trigger_threshold: 0.10
+  data_selection: full_replay
+  # Cap chosen so it BINDS: with ~100-150 evasions found per round, an
+  # oversized cap makes full_replay / hard_mining / bounded_buffer collect
+  # identical data and the data-selection axis cannot differentiate at all.
+  # It also models a real vendor's bounded adversarial-retraining budget.
+  buffer_size: 200
+  mode: scratch

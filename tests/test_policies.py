@@ -186,3 +186,42 @@ def test_minimax_escalates_only_on_defender_rest_rounds():
     o2 = CoEvolutionOrchestrator(cfg, verbose=False)
     o2._attacker_turns = 5
     assert o2._attacker_budget() == 20
+
+
+def test_finetune_ceiling_raises_instead_of_silently_refitting():
+    """Hitting the warm-start ceiling must fail loudly, not become a scratch fit.
+
+    The old behaviour refit from scratch at the ceiling, which silently turned
+    the final fine-tune rounds into scratch rounds and contaminated the tail
+    average that settled evasion is computed from.
+    """
+    from coevomal.defenders import GBDTDefender
+
+    rng = np.random.default_rng(0)
+    X = rng.standard_normal((200, 8)).astype(np.float32)
+    y = (rng.random(200) < 0.5).astype(int)
+    d = GBDTDefender(max_iter=20, max_total_iter=60, seed=0).fit(X, y)
+    d.fit(X, y, warm_start=True)          # 20 -> 40
+    d.fit(X, y, warm_start=True)          # 40 -> 60 (at ceiling)
+    with pytest.raises(RuntimeError, match="max_total_iter"):
+        d.fit(X, y, warm_start=True)      # would silently refit before
+
+
+def test_finetune_iter_is_independent_of_initial_size():
+    """The capacity-matched arm must not change the initial model.
+
+    Raising `max_iter` would also enlarge the from-scratch fit, making the two
+    arms start from different defenders and confounding the comparison.
+    """
+    from coevomal.defenders import GBDTDefender
+
+    rng = np.random.default_rng(1)
+    X = rng.standard_normal((200, 8)).astype(np.float32)
+    y = (rng.random(200) < 0.5).astype(int)
+    cost = GBDTDefender(max_iter=20, seed=0).fit(X, y)
+    cap = GBDTDefender(max_iter=20, finetune_iter=80, max_total_iter=500, seed=0).fit(X, y)
+    assert cost._model.n_iter_ == cap._model.n_iter_ == 20     # identical start
+    cost.fit(X, y, warm_start=True)
+    cap.fit(X, y, warm_start=True)
+    assert cost._model.n_iter_ == 40                            # +20 cost-matched
+    assert cap._model.n_iter_ == 100                            # +80 capacity-matched

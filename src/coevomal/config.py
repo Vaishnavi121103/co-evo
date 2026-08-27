@@ -59,6 +59,9 @@ class DefenderConfig:
     max_iter: int = 150
     learning_rate: float = 0.08
     max_depth: int | None = None
+    finetune_iter: int | None = None  # trees added per warm-start round
+                                      # (defaults to max_iter = cost-matched)
+    max_total_iter: int = 2000        # must exceed rounds*finetune_iter
     # MLP (torch) params:
     hidden: int = 128
     epochs: int = 40

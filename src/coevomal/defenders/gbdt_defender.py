@@ -31,17 +31,25 @@ class GBDTDefender(Defender):
         max_iter: int = 150,
         learning_rate: float = 0.08,
         max_depth: int | None = None,
-        max_total_iter: int = 600,
+        finetune_iter: int | None = None,
+        max_total_iter: int = 2000,
         seed: int = 0,
     ) -> None:
         self.max_iter = int(max_iter)
         self.learning_rate = float(learning_rate)
         self.max_depth = max_depth
-        # Ceiling on total boosting rounds under repeated warm-start fits.
-        # Each finetune adds `max_iter` trees, so over a long co-evolution run
-        # an uncapped model grows without bound: it gets steadily slower and
-        # more complex than its retrain-from-scratch counterpart, which would
-        # confound any scratch-vs-finetune cost comparison.
+        # Trees added per warm-start round. Kept separate from `max_iter` so
+        # the *initial* model is identical across arms: setting max_iter would
+        # also change the from-scratch fit and make the arms incomparable.
+        # `max_iter` alone gives the cost-matched arm (same incremental fit
+        # cost as a scratch refit); a larger value gives the capacity-matched
+        # arm, which the audit shows is what warm-starting needs to overturn an
+        # entrenched boundary.
+        self.finetune_iter = int(finetune_iter if finetune_iter else max_iter)
+        # Ceiling on total boosting rounds under repeated warm-start fits. It
+        # must sit ABOVE what a full run can reach, otherwise the arm silently
+        # falls back to a scratch refit in its final rounds and contaminates
+        # the tail average that settled evasion is computed from.
         self.max_total_iter = int(max_total_iter)
         self.seed = int(seed)
         self._model: HistGradientBoostingClassifier | None = None
@@ -61,16 +69,22 @@ class GBDTDefender(Defender):
         if warm_start and self._model is not None:
             # Continue boosting: add another `max_iter` trees on the new data.
             target = min(
-                self._model.max_iter + self.max_iter, self.max_total_iter
+                self._model.max_iter + self.finetune_iter, self.max_total_iter
             )
             if target > self._model.max_iter:
                 self._model.set_params(warm_start=True, max_iter=target)
                 self._model.fit(X, y)
             else:
-                # At the ceiling: refit from scratch so the newest adversarial
-                # data still reaches the model instead of being ignored.
-                self._model = self._new_model(warm_start=False)
-                self._model.fit(X, y)
+                # Ceiling reached. Refitting from scratch here would silently
+                # convert a fine-tune round into a scratch round, so this path
+                # is a misconfiguration rather than a fallback: size
+                # max_total_iter above rounds * finetune_iter.
+                raise RuntimeError(
+                    f"warm-start ceiling reached (max_total_iter="
+                    f"{self.max_total_iter}); raise it above "
+                    f"rounds*finetune_iter so the fine-tune arm is not "
+                    f"silently converted into a scratch refit"
+                )
         else:
             self._model = self._new_model(warm_start=False)
             self._model.fit(X, y)
@@ -90,6 +104,7 @@ class GBDTDefender(Defender):
             max_iter=self.max_iter,
             learning_rate=self.learning_rate,
             max_depth=self.max_depth,
+            finetune_iter=self.finetune_iter,
             max_total_iter=self.max_total_iter,
             seed=self.seed,
         )
