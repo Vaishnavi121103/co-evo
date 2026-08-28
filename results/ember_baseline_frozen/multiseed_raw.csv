@@ -1,0 +1,6 @@
+policy,seed,attacker,cadence,data_selection,mode,oscillation_index,mean_attack_success_tail,final_attack_success_rate,mean_evasion_tail,final_evasion_rate,max_evasion_rate,rounds_to_convergence,total_retrain_seconds,retrain_count
+random__never__full_replay,0,random,never,full_replay,scratch,0.01238138163175301,0.7809653916211292,0.8032786885245902,0.7995833333333332,0.82,0.82,3.0,0.0,0.0
+random__never__full_replay,1,random,never,full_replay,scratch,0.012097692617464982,0.8275047258979206,0.8147448015122873,0.8479166666666667,0.8366666666666667,0.86,3.0,0.0,0.0
+random__never__full_replay,2,random,never,full_replay,scratch,0.014012643100666869,0.8016098484848485,0.8162878787878788,0.8254166666666667,0.8383333333333334,0.8633333333333333,3.0,0.0,0.0
+random__never__full_replay,3,random,never,full_replay,scratch,0.006277716322216437,0.8229553903345724,0.8159851301115242,0.84125,0.835,0.8516666666666667,3.0,0.0,0.0
+random__never__full_replay,4,random,never,full_replay,scratch,0.008579691784155826,0.8115671641791045,0.7966417910447762,0.8316666666666667,0.8183333333333334,0.8533333333333334,3.0,0.0,0.0

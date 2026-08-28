@@ -1,0 +1,178 @@
+{
+  "config": {
+    "name": "ember_pilot_v4",
+    "rounds": 8,
+    "convergence_window": 4,
+    "convergence_tol": 0.03,
+    "early_stop": false,
+    "seed": 0,
+    "output_dir": "results",
+    "dataset": {
+      "name": "ember",
+      "n_features": 32,
+      "n_train": 8000,
+      "n_test_malicious": 600,
+      "class_separation": 1.4,
+      "mutable_fraction": 0.5,
+      "ember_path": "data/ember",
+      "seed": 0
+    },
+    "env": {
+      "action_space": "exemplar",
+      "n_actions": 16,
+      "max_steps": 60,
+      "step_scale": 4.0,
+      "evade_threshold": 0.5,
+      "reward_evade_bonus": 10.0,
+      "reward_step_penalty": 0.02,
+      "reward_mode": "logit"
+    },
+    "defender": {
+      "name": "gbdt",
+      "max_iter": 80,
+      "learning_rate": 0.08,
+      "max_depth": null,
+      "hidden": 128,
+      "epochs": 40,
+      "seed": 0
+    },
+    "attacker": {
+      "name": "random",
+      "train_episodes": 100,
+      "gamma": 0.95,
+      "lr": 0.001,
+      "hidden": 128,
+      "epsilon_start": 1.0,
+      "epsilon_end": 0.05,
+      "epsilon_decay": 0.995,
+      "buffer_size": 10000,
+      "batch_size": 64,
+      "target_sync": 200,
+      "train_every": 4,
+      "ppo_epochs": 4,
+      "clip": 0.2,
+      "rollout": 512,
+      "device": "auto",
+      "seed": 0
+    },
+    "retrain": {
+      "cadence": "every_round",
+      "every_n": 3,
+      "trigger_threshold": 0.3,
+      "data_selection": "full_replay",
+      "buffer_size": 200,
+      "mode": "scratch"
+    }
+  },
+  "rounds": [
+    {
+      "round": 0,
+      "evasion_rate": 0.26,
+      "attack_success_rate": 0.1912568306010929,
+      "pre_evasive_rate": 0.085,
+      "mean_queries": 49.57666666666667,
+      "retrained": true,
+      "retrain_seconds": 13.95390339998994,
+      "train_samples": 6556,
+      "clean_accuracy": 0.98125,
+      "buffer_size": 156
+    },
+    {
+      "round": 1,
+      "evasion_rate": 0.03666666666666667,
+      "attack_success_rate": 0.03666666666666667,
+      "pre_evasive_rate": 0.0,
+      "mean_queries": 59.96,
+      "retrained": true,
+      "retrain_seconds": 14.047146500000963,
+      "train_samples": 6578,
+      "clean_accuracy": 0.98,
+      "buffer_size": 178
+    },
+    {
+      "round": 2,
+      "evasion_rate": 0.0016666666666666668,
+      "attack_success_rate": 0.0016666666666666668,
+      "pre_evasive_rate": 0.0,
+      "mean_queries": 60.945,
+      "retrained": true,
+      "retrain_seconds": 14.537761300001875,
+      "train_samples": 6579,
+      "clean_accuracy": 0.981875,
+      "buffer_size": 179
+    },
+    {
+      "round": 3,
+      "evasion_rate": 0.0016666666666666668,
+      "attack_success_rate": 0.0016666666666666668,
+      "pre_evasive_rate": 0.0,
+      "mean_queries": 60.925,
+      "retrained": true,
+      "retrain_seconds": 14.911841900000582,
+      "train_samples": 6580,
+      "clean_accuracy": 0.98,
+      "buffer_size": 180
+    },
+    {
+      "round": 4,
+      "evasion_rate": 0.0,
+      "attack_success_rate": 0.0,
+      "pre_evasive_rate": 0.0,
+      "mean_queries": 61.0,
+      "retrained": true,
+      "retrain_seconds": 13.922587099994416,
+      "train_samples": 6580,
+      "clean_accuracy": 0.98,
+      "buffer_size": 180
+    },
+    {
+      "round": 5,
+      "evasion_rate": 0.0,
+      "attack_success_rate": 0.0,
+      "pre_evasive_rate": 0.0,
+      "mean_queries": 61.0,
+      "retrained": true,
+      "retrain_seconds": 14.751235700008692,
+      "train_samples": 6580,
+      "clean_accuracy": 0.98,
+      "buffer_size": 180
+    },
+    {
+      "round": 6,
+      "evasion_rate": 0.0,
+      "attack_success_rate": 0.0,
+      "pre_evasive_rate": 0.0,
+      "mean_queries": 61.0,
+      "retrained": true,
+      "retrain_seconds": 15.206123500000103,
+      "train_samples": 6580,
+      "clean_accuracy": 0.98,
+      "buffer_size": 180
+    },
+    {
+      "round": 7,
+      "evasion_rate": 0.0016666666666666668,
+      "attack_success_rate": 0.0016666666666666668,
+      "pre_evasive_rate": 0.0,
+      "mean_queries": 60.95166666666667,
+      "retrained": true,
+      "retrain_seconds": 14.68267979999655,
+      "train_samples": 6581,
+      "clean_accuracy": 0.981875,
+      "buffer_size": 181
+    }
+  ],
+  "summary": {
+    "mean_attack_success_tail": 0.0004166666666666667,
+    "final_attack_success_rate": 0.0016666666666666668,
+    "oscillation_index": 0.0007216878364870322,
+    "rounds_to_convergence": 4,
+    "converged": true,
+    "mean_evasion_tail": 0.0004166666666666667,
+    "final_evasion_rate": 0.0016666666666666668,
+    "max_evasion_rate": 0.26,
+    "total_retrain_seconds": 116.01327919999312,
+    "retrain_count": 8,
+    "robustness_per_cost": 0.008616111364373819
+  }
+}

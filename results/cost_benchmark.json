@@ -1,0 +1,52 @@
+[
+  {
+    "label": "scratch  every_round/full_replay",
+    "retrains": 8,
+    "trees": 640,
+    "retrain_s": 131.8,
+    "s_per_retrain": 16.47,
+    "s_per_100_trees": 20.592,
+    "wall_s": 169.1,
+    "evasion": 0.0425
+  },
+  {
+    "label": "scratch  every_n/full_replay",
+    "retrains": 3,
+    "trees": 240,
+    "retrain_s": 45.7,
+    "s_per_retrain": 15.23,
+    "s_per_100_trees": 19.033,
+    "wall_s": 77.4,
+    "evasion": 0.055
+  },
+  {
+    "label": "minimax  full_replay",
+    "retrains": 4,
+    "trees": 320,
+    "retrain_s": 58.5,
+    "s_per_retrain": 14.63,
+    "s_per_100_trees": 18.29,
+    "wall_s": 101.8,
+    "evasion": 0.0946
+  },
+  {
+    "label": "finetune cost-matched (+80)",
+    "retrains": 8,
+    "trees": 571,
+    "retrain_s": 48.4,
+    "s_per_retrain": 6.05,
+    "s_per_100_trees": 8.474,
+    "wall_s": 77.4,
+    "evasion": 0.9992
+  },
+  {
+    "label": "finetune capacity-matched (+400)",
+    "retrains": 8,
+    "trees": 3200,
+    "retrain_s": 160.1,
+    "s_per_retrain": 20.02,
+    "s_per_100_trees": 5.005,
+    "wall_s": 232.6,
+    "evasion": 0.3463
+  }
+]
